@@ -50,7 +50,7 @@ export default function LoginPage() {
         </button>
 
         <p className="auth-foot">
-          No account yet? <Link href="/pricing">Start your free trial</Link>
+          No account yet? <Link href="/signup">Start your free trial</Link>
         </p>
 
         <p className="auth-note">
