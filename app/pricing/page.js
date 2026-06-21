@@ -55,7 +55,7 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <Link href="/login" className="btn btn--primary btn--block">
+            <Link href="/signup" className="btn btn--primary btn--block">
               Start 7-day free trial
             </Link>
             <p className="price-fine">
