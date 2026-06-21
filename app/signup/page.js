@@ -31,7 +31,6 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-    // Email confirmation OFF: session exists right away.
     if (data.session) {
       window.location.href = "/account";
       return;
