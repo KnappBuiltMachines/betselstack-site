@@ -24,6 +24,12 @@ export default async function AccountPage() {
         <h1>My account</h1>
         <p className="sub">{user.email}</p>
 
+        {access.allowed && (
+          <Link href="/builder" className="btn btn--primary btn--block" style={{ marginBottom: 18 }}>
+            Open the Pallet Builder
+          </Link>
+        )}
+
         {sub ? (
           <div>
             <p>Status: <strong style={amber}>{sub.status}</strong></p>
