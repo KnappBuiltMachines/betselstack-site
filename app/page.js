@@ -46,7 +46,7 @@ export default function HomePage() {
               footprints, and optimize trailer loading, all with real-time 3D.
             </p>
             <div className="hero-actions">
-              <Link href="/pricing" className="btn btn--primary">
+              <Link href="/signup" className="btn btn--primary">
                 Start 7-day free trial &rarr;
               </Link>
               <Link href="/software" className="btn btn--ghost">
@@ -145,7 +145,7 @@ export default function HomePage() {
               required. Add a card whenever you are ready to keep going.
             </p>
             <div className="cta-actions">
-              <Link href="/pricing" className="btn btn--primary">
+              <Link href="/signup" className="btn btn--primary">
                 Start free trial
               </Link>
               <Link href="/software" className="btn btn--ghost">
