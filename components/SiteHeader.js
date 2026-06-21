@@ -69,39 +69,4 @@ export default function SiteHeader() {
       )}
     </header>
   );
-}            >
-              {l.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="nav-actions">
-          <Link href="/login" className="nav-link">Login</Link>
-          <Link href="/pricing" className="btn btn--primary">Get Access</Link>
-          <button
-            className="menu-toggle"
-            aria-label="Toggle menu"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? "\u2715" : "\u2630"}
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <div className="container">
-          <div className="mobile-menu">
-            {LINKS.map((l) => (
-              <Link key={l.href} href={l.href} onClick={() => setOpen(false)}>
-                {l.label}
-              </Link>
-            ))}
-            <Link href="/login" onClick={() => setOpen(false)}>Login</Link>
-            <Link href="/pricing" onClick={() => setOpen(false)}>Get Access</Link>
-          </div>
-        </div>
-      )}
-    </header>
-  );
 }
