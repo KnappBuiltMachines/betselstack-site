@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, getActiveSubscription } from "@/lib/subscription";
+import BillingButtons from "@/components/BillingButtons";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Account" };
@@ -39,6 +40,9 @@ export default async function AccountPage() {
                 {new Date(sub.current_period_end).toLocaleDateString()}
               </p>
             )}
+            <div style={{ marginTop: 14 }}>
+              <BillingButtons subscribed />
+            </div>
           </div>
         ) : access.reason === "trial" ? (
           <div>
@@ -55,9 +59,9 @@ export default async function AccountPage() {
               No card on file yet. Subscribe anytime to keep access when your
               trial ends.
             </p>
-            <Link href="/pricing" className="btn btn--ghost btn--block" style={{ marginTop: 14 }}>
-              Subscribe
-            </Link>
+            <div style={{ marginTop: 14 }}>
+              <BillingButtons />
+            </div>
           </div>
         ) : (
           <div>
@@ -66,9 +70,12 @@ export default async function AccountPage() {
                 ? "Your free trial has ended."
                 : "No active membership."}
             </p>
-            <Link href="/pricing" className="btn btn--primary btn--block" style={{ marginTop: 14 }}>
-              {access.reason === "expired" ? "Subscribe to continue" : "Choose a plan"}
-            </Link>
+            <p style={{ color: "var(--muted)" }}>
+              Subscribe to unlock the Pallet Pattern Creator.
+            </p>
+            <div style={{ marginTop: 14 }}>
+              <BillingButtons />
+            </div>
           </div>
         )}
 
