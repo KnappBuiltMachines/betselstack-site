@@ -49,7 +49,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="auth-foot">
+        <p className="auth-foot" style={{ marginTop: 14 }}>
+          <Link href="/forgot-password">Forgot your password?</Link>
+        </p>
+        <p className="auth-foot" style={{ marginTop: 6 }}>
           No account yet? <Link href="/signup">Start your free trial</Link>
         </p>
       </div>
