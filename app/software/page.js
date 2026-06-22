@@ -2,58 +2,54 @@ import Link from "next/link";
 
 export const metadata = { title: "Stack Software" };
 
-/*
-  To use real screenshots later:
-  1. Drop images into /public/screenshots/ (e.g. builder.jpg)
-  2. Replace <MediaPlaceholder label="..." /> with:
-       <img src="/screenshots/builder.jpg" alt="..." className="media-frame" />
-*/
+const CAPS = [
+  ["Deeper customization", "Build patterns the way your spec demands, not the way a template forces."],
+  ["Standard & custom pallets", "GMA, block, stringer, and fully custom dimensions \u2014 quarter pallet to oversized."],
+  ["Real-time 3D", "Inspect the load and pattern from any angle before production."],
+  ["Board-level layout", "Deck boards, stringers, spacing, and overhang under your control."],
+  ["PDF reports", "Branded, print-ready cut sheets and engineering summaries."],
+  ["Excel export", "Bill-of-materials and pattern data that drops into your systems."],
+];
 
-const FEATURES = [
+const SHOTS = [
   {
-    tag: "Pattern Engine",
-    h: "50+ optimized patterns, instantly",
-    p: "Enter your case and pallet dimensions and Stack instantly generates dozens of layouts \u2014 each ranked by cubic efficiency, case support, and stability. You start from the best option, not a blank screen.",
+    img: "/screenshots/builder.jpg",
+    kicker: "Pattern Engine",
+    title: "50+ optimized patterns, instantly",
+    desc: "Enter your case and pallet dimensions and Betsel Stack instantly generates dozens of layouts \u2014 each ranked by cubic efficiency, case support, and stability. You start from the best option, not a blank screen.",
     why: "Stop guessing at Ti-Hi. See the most efficient, most stable pattern for your exact case in seconds.",
-    media: "Pattern engine \u2014 ranked layouts",
   },
   {
-    tag: "Layer Planning",
-    h: "Plan every layer, down to the case",
-    p: "Step through the load one layer at a time \u2014 including alternating and interlocked layers \u2014 with exact case placement, orientation, and dimensions called out.",
+    img: "/screenshots/layers-2d.jpg",
+    kicker: "Layer Planning",
+    title: "Plan every layer, down to the case",
+    desc: "Step through the load one layer at a time \u2014 including alternating and interlocked layers \u2014 with exact case placement, orientation, and dimensions called out.",
     why: "Gives your crew a clear, repeatable build map and fewer mistakes on the floor.",
-    media: "2D layer planning view",
   },
   {
-    tag: "Mixed-Case Loads",
-    h: "Multiple case sizes on one pallet",
-    p: "Real shipments are not one SKU. Combine different cases and box sizes, layer by layer, and see the finished unit load rendered in full 3D.",
+    img: "/screenshots/mixed-3d.jpg",
+    kicker: "Mixed-Case Loads",
+    title: "Multiple case sizes on one pallet",
+    desc: "Real shipments are not one SKU. Combine different cases and box sizes, layer by layer, and see the finished unit load rendered in full 3D.",
     why: "Build and document accurate mixed loads that match what actually ships.",
-    media: "Mixed-case 3D unit load",
   },
   {
-    tag: "Trailer Loading",
-    h: "Fill the trailer, keep it balanced",
-    p: "Plan how pallets fit a 53' reefer, dry van, or custom trailer \u2014 with live pallet counts, column-and-row layout, and a center-of-mass balance check.",
+    img: "/screenshots/truck-load.jpg",
+    kicker: "Trailer Loading",
+    title: "Fill the trailer, keep it balanced",
+    desc: "Plan how pallets fit a 53' reefer, dry van, or custom trailer \u2014 with live pallet counts, column-and-row layout, and a center-of-mass balance check.",
     why: "Maximize every trailer and cut freight cost per unit shipped.",
-    media: "Trailer loading layout",
-  },
-  {
-    tag: "Report Builder",
-    h: "Build the spec sheet you need",
-    p: "Drag in 3D renders, 2D layer diagrams, and case, pallet, and truck stats to compose a custom, branded report \u2014 or start from a ready-made layout.",
-    why: "Hand customers and crews exactly the information they need, in your branding.",
-    media: "Report builder canvas",
   },
 ];
 
-function MediaPlaceholder({ label }) {
+function Shot({ img, alt }) {
   return (
-    <div className="media-frame feature-media">
-      <span className="ph-label">
-        <strong>{label}</strong>
-        <span>Screenshot goes here</span>
-      </span>
+    <div
+      className="feature-media"
+      style={{ border: "1px solid var(--line)", borderRadius: 14, background: "var(--panel)", padding: 6 }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={img} alt={alt} style={{ width: "100%", height: "auto", borderRadius: 9, display: "block" }} />
     </div>
   );
 }
@@ -97,51 +93,71 @@ export default function SoftwarePage() {
         </div>
       </section>
 
-      {/* FEATURE ROWS */}
-      <section className="section" style={{ paddingTop: 24 }}>
+      {/* CAPABILITIES */}
+      <section className="section" style={{ paddingTop: 8 }}>
+        <div className="container">
+          <p className="eyebrow">In the toolkit</p>
+          <h2 className="section-title">Everything in one engineering tool</h2>
+          <div className="grid grid-3" style={{ marginTop: 36 }}>
+            {CAPS.map(([t, d]) => (
+              <div className="card" key={t}>
+                <h3>{t}</h3>
+                <p>{d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SCREENSHOT SHOWCASE */}
+      <section className="section" style={{ paddingTop: 0 }}>
         <div className="container">
           <p className="eyebrow">See it in action</p>
           <h2 className="section-title">Inside the software</h2>
           <p className="lead">
             A look at the actual tools your team uses every day &mdash; from the
-            pattern engine to print-ready engineering reports.
+            pattern engine to layer-by-layer build maps.
           </p>
 
           <div style={{ marginTop: 24 }}>
-            {FEATURES.map((f) => (
-              <div className="feature-row" key={f.tag}>
+            {SHOTS.map((s) => (
+              <div className="feature-row" key={s.img}>
                 <div>
-                  <div className="feature-tag">{f.tag}</div>
-                  <h3>{f.h}</h3>
-                  <p>{f.p}</p>
+                  <div className="feature-tag">{s.kicker}</div>
+                  <h3>{s.title}</h3>
+                  <p>{s.desc}</p>
                   <p className="feature-why">
                     <span>Why it matters &mdash; </span>
-                    {f.why}
+                    {s.why}
                   </p>
                 </div>
-                <MediaPlaceholder label={f.media} />
+                <Shot img={s.img} alt={s.title} />
               </div>
             ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Professional output (no media swap on left) */}
-            <div className="feature-row">
-              <div>
-                <div className="feature-tag">Professional Output</div>
-                <h3>Export print-ready engineering reports</h3>
-                <p>
-                  One click turns any pattern into a polished, branded Pallet
-                  Pattern Engineering Report &mdash; complete with dimensions,
-                  cubic efficiency, support, stability, weight breakdowns, and
-                  truck loading. Ready to print, email, or export to Excel.
-                </p>
-                <p className="feature-why">
-                  <span>Why it matters &mdash; </span>
-                  Look professional, keep specs on file, and give every job a
-                  documented paper trail.
-                </p>
-              </div>
-              <MediaPlaceholder label="Engineering report output" />
-            </div>
+      {/* PROFESSIONAL OUTPUT */}
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="container">
+          <div className="card" style={{ padding: "34px 30px" }}>
+            <div className="feature-tag">Professional Output</div>
+            <h3 style={{ fontSize: "clamp(22px, 3vw, 28px)", marginBottom: 12 }}>
+              Export print-ready engineering reports
+            </h3>
+            <p style={{ color: "var(--muted)", maxWidth: "70ch" }}>
+              Compose a custom report from 3D renders, 2D layer diagrams, and
+              case, pallet, and truck stats &mdash; then export a polished,
+              branded Pallet Pattern Engineering Report with dimensions, cubic
+              efficiency, support, stability, weight breakdowns, and truck
+              loading. Ready to print, email, or export to Excel.
+            </p>
+            <p className="feature-why" style={{ maxWidth: "70ch" }}>
+              <span>Why it matters &mdash; </span>
+              Look professional, keep specs on file, and give every job a
+              documented paper trail.
+            </p>
           </div>
         </div>
       </section>
