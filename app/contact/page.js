@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 // EDIT THESE: your real Betsel Stack contact details
-const CONTACT_EMAIL = "hello@betselstack.com";
-const LOCATION = "Hammonton, New Jersey";
+const CONTACT_EMAIL = "team@betselstack.com";
+
 // const PHONE = "609.000.0000"; // optional: uncomment block below to show
 
 export default function ContactPage() {
