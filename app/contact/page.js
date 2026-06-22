@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 
-// EDIT THESE: your real Betsel Stack contact details
+// EDIT THIS: your real Betsel Stack contact email
 const CONTACT_EMAIL = "team@betselstack.com";
-
-// const PHONE = "609.000.0000"; // optional: uncomment block below to show
 
 export default function ContactPage() {
   const [name, setName] = useState("");
@@ -41,16 +39,6 @@ export default function ContactPage() {
               <div className="v">
                 <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               </div>
-            </div>
-            {/*
-            <div className="contact-detail">
-              <div className="k">Phone</div>
-              <div className="v"><a href={`tel:${PHONE}`}>{PHONE}</a></div>
-            </div>
-            */}
-            <div className="contact-detail">
-              <div className="k">Location</div>
-              <div className="v">{LOCATION}</div>
             </div>
           </div>
 
