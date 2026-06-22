@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
@@ -11,6 +11,12 @@ export default function SignupPage() {
   const [err, setErr] = useState(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [next, setNext] = useState("/account");
+
+  useEffect(() => {
+    const n = new URLSearchParams(window.location.search).get("next");
+    if (n) setNext(n);
+  }, []);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -23,7 +29,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: name },
-        emailRedirectTo: `${siteUrl}/auth/callback?next=/account`,
+        emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     if (error) {
@@ -31,8 +37,9 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
+    // Email confirmation OFF: session exists right away.
     if (data.session) {
-      window.location.href = "/account";
+      window.location.href = next;
       return;
     }
     setDone(true);
@@ -42,16 +49,16 @@ export default function SignupPage() {
   return (
     <section className="auth-wrap">
       <div className="auth-card">
-        <h1>Start your free trial</h1>
+        <h1>Create your account</h1>
         <p className="sub">
-          Create your Betsel Stack&trade; account and get 7 days of full access
-          to the Pallet Pattern Creator &mdash; no credit card required.
+          Get started with Betsel Stack&trade; &mdash; the Pallet Pattern
+          Creator. Start a free trial, or subscribe right after signing up.
         </p>
 
         {done ? (
           <p className="auth-note" style={{ borderStyle: "solid" }}>
-            Check your email to confirm your account, then come back and{" "}
-            <Link href="/login" style={{ color: "var(--amber)" }}>log in</Link>.
+            Check your email to confirm your account. The confirmation link will
+            bring you right back to finish.
           </p>
         ) : (
           <form onSubmit={handleSignup}>
@@ -69,13 +76,14 @@ export default function SignupPage() {
             </div>
             {err && <p style={{ color: "#ff6b6b", fontSize: 14, marginBottom: 12 }}>{err}</p>}
             <button className="btn btn--primary btn--block" type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Start 7-day free trial"}
+              {loading ? "Creating..." : "Create account"}
             </button>
           </form>
         )}
 
         <p className="auth-foot">
-          Already have an account? <Link href="/login">Log in</Link>
+          Already have an account?{" "}
+          <Link href={`/login?next=${encodeURIComponent(next)}`}>Log in</Link>
         </p>
       </div>
     </section>
