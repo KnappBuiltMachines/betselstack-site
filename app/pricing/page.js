@@ -23,8 +23,8 @@ export default function PricingPage() {
               Try it free for <span className="accent">7 days</span>
             </h1>
             <p className="lead">
-              Start with a 7-day free trial &mdash; no credit card required. Add
-              a card whenever you are ready to keep going. One simple
+              Start with a 7-day free trial &mdash; no credit card required
+              &mdash; or subscribe now and jump straight in. One simple
               membership, cancel anytime.
             </p>
           </div>
@@ -58,8 +58,12 @@ export default function PricingPage() {
             <Link href="/signup" className="btn btn--primary btn--block">
               Start 7-day free trial
             </Link>
+            <Link href="/subscribe" className="btn btn--ghost btn--block" style={{ marginTop: 10 }}>
+              Subscribe now &mdash; $89/month
+            </Link>
             <p className="price-fine">
-              Billed monthly after the trial. Cancel anytime.{" "}
+              Free trial needs no card. Prefer to skip it? Subscribe now and get
+              billed today. Cancel anytime.{" "}
               Already have an account? <Link href="/login" style={{ color: "var(--amber)" }}>Log in</Link>.
             </p>
           </div>
