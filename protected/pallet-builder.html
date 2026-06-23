@@ -237,7 +237,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       <div class="mnu-sub" onclick="mnuOpen()">Open… <span class="kbd">Ctrl+O</span></div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuSave()">Save <span class="kbd">Ctrl+S</span></div>
-      <div class="mnu-sub" onclick="mnuSaveAs()">Save As… <span class="kbd">Ctrl+Shift+S</span></div>
+      <div class="mnu-sub" onclick="mnuSaveAs()">Save to computer as&hellip; <span class="kbd">Ctrl+Shift+S</span></div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuExit()">Exit</div>
     </div>
@@ -7584,24 +7584,96 @@ function _downloadKBM(filename){
   URL.revokeObjectURL(url);
 }
 
+// Remembers the exact file the user chose, so "Save" can re-write it
+// without asking again. Only set on browsers with the File System
+// Access API (Chrome, Edge); stays null on Firefox/Safari.
+let _kbmFileHandle = null;
+
+// Builds the default file name from the project name + today's date.
+function _suggestedKBMName(){
+  const proj = (document.getElementById('rptProject')||{}).value || 'project';
+  const safe = proj.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40) || 'project';
+  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  return safe + '_' + date + '.kbm';
+}
+
+// Makes sure we still have permission to write back to a chosen file.
+async function _verifyHandlePermission(handle){
+  if(!handle || typeof handle.queryPermission !== 'function') return true;
+  const opts = { mode: 'readwrite' };
+  try{
+    if((await handle.queryPermission(opts))   === 'granted') return true;
+    if((await handle.requestPermission(opts)) === 'granted') return true;
+  } catch(e){}
+  return false;
+}
+
+// Opens a real "choose where to save" dialog (Chrome/Edge). On browsers
+// without the picker, falls back to a normal download. Returns false if
+// the user cancels the dialog, true if a file was written.
+async function _pickAndSaveKBM(){
+  const json = JSON.stringify(_buildKBM(), null, 2);
+  const name = _suggestedKBMName();
+
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [{ description: 'Pallet project',
+                  accept: { 'application/json': ['.kbm'] } }]
+      });
+      const w = await handle.createWritable();
+      await w.write(json);
+      await w.close();
+      _kbmFileHandle  = handle;
+      _kbmCurrentFile = handle.name;
+      document.getElementById('currentFile').textContent = '  \u{1F4C4} ' + handle.name;
+      return true;
+    } catch(err){
+      if(err && err.name === 'AbortError') return false; // user cancelled
+      // any other error: drop through to the download fallback below
+    }
+  }
+
+  // Fallback for Firefox/Safari/older browsers: browser picks the folder.
+  const blob = new Blob([json], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+  _kbmFileHandle  = null;
+  _kbmCurrentFile = name;
+  document.getElementById('currentFile').textContent = '  \u{1F4C4} ' + name;
+  return true;
+}
+
+// Quietly re-writes the file the user already chose, no dialog. If there
+// is no remembered file (or the browser lacks the API), it acts like
+// "Save As" and opens the picker.
+async function _quickSaveKBM(){
+  if(_kbmFileHandle && typeof _kbmFileHandle.createWritable === 'function'){
+    if(await _verifyHandlePermission(_kbmFileHandle)){
+      try{
+        const w = await _kbmFileHandle.createWritable();
+        await w.write(JSON.stringify(_buildKBM(), null, 2));
+        await w.close();
+        document.getElementById('currentFile').textContent =
+          '  \u{1F4C4} ' + _kbmFileHandle.name + '  \u2713';
+        return;
+      } catch(e){}
+    }
+  }
+  _pickAndSaveKBM();
+}
+
 function mnuSave(){
   mnuClose();
-  if(_kbmCurrentFile){
-    _downloadKBM(_kbmCurrentFile);
-  } else {
-    mnuSaveAs();
-  }
+  _quickSaveKBM();
 }
 
 function mnuSaveAs(){
   mnuClose();
-  const proj = (document.getElementById('rptProject')||{}).value || 'project';
-  const safe = proj.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40) || 'project';
-  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  const name = `${safe}_${date}.kbm`;
-  _downloadKBM(name);
-  _kbmCurrentFile = name;
-  document.getElementById('currentFile').textContent = '  📄 '+name;
+  _pickAndSaveKBM();
 }
 
 function mnuExit(){
