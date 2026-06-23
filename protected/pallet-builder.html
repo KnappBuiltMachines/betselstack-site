@@ -234,7 +234,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
     <button class="mnu-btn" onclick="mnuToggle('mnuFile')">File</button>
     <div class="mnu-dropdown" id="mnuFile">
       <div class="mnu-sub" onclick="mnuNew()">New <span class="kbd">Ctrl+N</span></div>
-      <div class="mnu-sub" onclick="mnuOpen()">Open… <span class="kbd">Ctrl+O</span></div>
+      <div class="mnu-sub" onclick="mnuOpen()">Open&hellip; <span class="kbd">Ctrl+O</span></div>
+      <div class="mnu-sub" onclick="mnuOpenCloud()">Open from cloud&hellip;</div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuSave()">Save <span class="kbd">Ctrl+S</span></div>
       <div class="mnu-sub" onclick="mnuSaveAs()">Save to computer as&hellip; <span class="kbd">Ctrl+Shift+S</span></div>
@@ -7710,6 +7711,114 @@ async function mnuSaveCloud(){
     _showNotification('Saved to cloud as "' + (row && row.name ? row.name : name) + '"', false);
   } catch(err){
     _showNotification('Cloud save failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+// ── Open from cloud ───────────────────────────────────────────
+// Lists the signed-in user's cloud patterns in a small pop-up and
+// loads the one they click, by fetching its full data from the same
+// /api/patterns route and feeding it to the normal restore path.
+function mnuOpenCloud(){
+  mnuClose();
+  _openCloudModal();
+}
+
+function _fmtCloudDate(iso){
+  try{ return new Date(iso).toLocaleString(); } catch(e){ return iso || ''; }
+}
+
+function _closeCloudModal(){
+  const ov = document.getElementById('_cloudOpenOverlay');
+  if(ov) ov.style.display = 'none';
+}
+
+async function _openCloudModal(){
+  let ov = document.getElementById('_cloudOpenOverlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = '_cloudOpenOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);'
+      + 'display:flex;align-items:center;justify-content:center;';
+    ov.addEventListener('click', function(e){ if(e.target === ov) _closeCloudModal(); });
+    const panel = document.createElement('div');
+    panel.id = '_cloudOpenPanel';
+    panel.style.cssText = 'width:460px;max-width:92vw;max-height:80vh;overflow:auto;'
+      + 'background:#1b1b1b;border:1px solid #444;border-radius:8px;'
+      + 'box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:sans-serif;color:#eee;';
+    ov.appendChild(panel);
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+
+  const panel = document.getElementById('_cloudOpenPanel');
+  panel.innerHTML =
+      '<div style="padding:14px 18px;border-bottom:1px solid #333;display:flex;'
+    + 'align-items:center;justify-content:space-between;">'
+    + '<span style="font-size:14px;letter-spacing:1px;color:#f5a623;">OPEN FROM CLOUD</span>'
+    + '<span id="_cloudClose" style="cursor:pointer;font-size:18px;color:#888;">&times;</span></div>'
+    + '<div id="_cloudList" style="padding:8px 0;color:#999;text-align:center;">'
+    + '<div style="padding:18px;">Loading...</div></div>';
+  document.getElementById('_cloudClose').onclick = _closeCloudModal;
+
+  const list = document.getElementById('_cloudList');
+  try{
+    const res = await fetch('/api/patterns', { credentials:'same-origin' });
+    if(res.status === 401){ list.innerHTML = '<div style="padding:18px;">Please sign in again.</div>'; return; }
+    if(res.status === 403){ list.innerHTML = '<div style="padding:18px;">Your access has expired.</div>'; return; }
+    if(!res.ok){ list.innerHTML = '<div style="padding:18px;">Could not load patterns (HTTP ' + res.status + ').</div>'; return; }
+    const payload = await res.json();
+    const rows = (payload && payload.patterns) || [];
+    if(!rows.length){
+      list.innerHTML = '<div style="padding:18px;">No saved patterns yet.<br>Use File &rarr; Save to cloud first.</div>';
+      return;
+    }
+    list.style.textAlign = 'left';
+    list.innerHTML = '';
+    rows.forEach(function(r){
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:11px 18px;border-bottom:1px solid #2a2a2a;cursor:pointer;'
+        + 'display:flex;flex-direction:column;gap:2px;';
+      item.onmouseenter = function(){ item.style.background = '#262626'; };
+      item.onmouseleave = function(){ item.style.background = 'transparent'; };
+      item.onclick = function(){ _loadCloudPattern(r.id, r.name); };
+      const nm = document.createElement('div');
+      nm.textContent = r.name || 'Untitled pattern';
+      nm.style.cssText = 'font-size:13px;color:#eee;';
+      const dt = document.createElement('div');
+      dt.textContent = _fmtCloudDate(r.updated_at || r.created_at);
+      dt.style.cssText = 'font-size:11px;color:#888;';
+      item.appendChild(nm); item.appendChild(dt);
+      list.appendChild(item);
+    });
+  } catch(err){
+    list.innerHTML = '<div style="padding:18px;">Could not load patterns: '
+      + (err && err.message ? err.message : 'network error') + '</div>';
+  }
+}
+
+async function _loadCloudPattern(id, name){
+  const list = document.getElementById('_cloudList');
+  if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Opening "'
+    + (name || '') + '"...</div>';
+  try{
+    const res = await fetch('/api/patterns?id=' + encodeURIComponent(id), { credentials:'same-origin' });
+    if(!res.ok){ if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Could not open (HTTP ' + res.status + ').</div>'; return; }
+    const row = await res.json();
+    if(!row || !row.data){ if(list) list.innerHTML = '<div style="padding:18px;color:#999;">That pattern has no data.</div>'; return; }
+    try{
+      _restoreKBM(row.data);
+    } catch(e){
+      if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Could not open: ' + e.message + '</div>';
+      return;
+    }
+    _kbmFileHandle  = null;                       // came from cloud, not a local file
+    _kbmCurrentFile = (row.name || name || 'cloud pattern');
+    document.getElementById('currentFile').textContent = '  \u2601 ' + _kbmCurrentFile;
+    _closeCloudModal();
+    _showNotification('Opened "' + _kbmCurrentFile + '" from cloud', false);
+  } catch(err){
+    if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Could not open: '
+      + (err && err.message ? err.message : 'network error') + '</div>';
   }
 }
 
