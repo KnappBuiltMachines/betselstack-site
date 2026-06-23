@@ -238,6 +238,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuSave()">Save <span class="kbd">Ctrl+S</span></div>
       <div class="mnu-sub" onclick="mnuSaveAs()">Save to computer as&hellip; <span class="kbd">Ctrl+Shift+S</span></div>
+      <div class="mnu-sub" onclick="mnuSaveCloud()">Save to cloud</div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuExit()">Exit</div>
     </div>
@@ -7674,6 +7675,42 @@ function mnuSave(){
 function mnuSaveAs(){
   mnuClose();
   _pickAndSaveKBM();
+}
+
+// Saves the current project to the user's Betsel Stack cloud account.
+// Sends the same project bundle to the same-origin /api/patterns route;
+// the server reads the signed-in user from the session cookie and stores
+// the row against that user. The mobile version reads these rows back.
+// Only works inside the signed-in Betsel Stack app (not a loose file).
+async function mnuSaveCloud(){
+  mnuClose();
+  const proj = (document.getElementById('rptProject')||{}).value || '';
+  const name = (proj.trim() || _suggestedKBMName().replace(/\.kbm$/,'')).slice(0,120);
+
+  // Keep cloud rows lean: a per-user logo doesn't belong in every pattern.
+  const bundle = _buildKBM();
+  if(bundle.settings) bundle.settings.logoDataUrl = null;
+
+  _showNotification('Saving to cloud...', false);
+  try{
+    const res = await fetch('/api/patterns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name: name, data: bundle })
+    });
+    if(res.status === 401){ _showNotification('Please sign in again to save to cloud', true); return; }
+    if(res.status === 403){ _showNotification('Cloud save needs an active account', true); return; }
+    if(!res.ok){
+      const t = await res.text().catch(function(){ return ''; });
+      _showNotification('Cloud save failed: ' + (t || ('HTTP ' + res.status)), true);
+      return;
+    }
+    const row = await res.json();
+    _showNotification('Saved to cloud as "' + (row && row.name ? row.name : name) + '"', false);
+  } catch(err){
+    _showNotification('Cloud save failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
 }
 
 function mnuExit(){
