@@ -396,8 +396,6 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
     </div>
     <div class="dl" style="margin-bottom:2px;">MAX STACK HEIGHT (<span id="mhU">in</span>)</div>
     <input type="number" id="maxHI" min="0" step="0.5" placeholder='e.g. 96"' oninput="ST.maxH=this.value; const _v=parseFloat(this.value); if(!this.value||_v<=0||isNaN(_v)){ _clearPalletState(); } else { _autoCalculate(600); }" style="margin-bottom:5px;"/>
-    <div class="dl" style="margin-bottom:2px;">PALLET WEIGHT LIMIT (<span id="wtLimitUnit">lbs</span>)</div>
-    <input type="number" id="palWtI" min="0" step="1" placeholder="e.g. 2500" oninput="ST.palletWeightLimit=this.value;if(ST.stats)renderStats()"/>
     <div id="maxHA"></div>
   </div>
 
@@ -7547,9 +7545,11 @@ document.addEventListener('keydown', e=>{
 function mnuNew(){
   mnuClose();
   if(!confirm('Start a new project? Unsaved changes will be lost.')) return;
-  _kbmCurrentFile = null;
-  document.getElementById('currentFile').textContent = '';
-  leResetAll();
+  // Load the builder fresh at a unique URL. A plain reload lets the browser
+  // refill the inputs with their previously typed values (form restoration),
+  // which is why a reload looked unchanged. Pointing at a new URL forces a
+  // genuinely blank start every time.
+  location.replace(location.pathname + '?new=' + Date.now());
 }
 
 function mnuOpen(){
