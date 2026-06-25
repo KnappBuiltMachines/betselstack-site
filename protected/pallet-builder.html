@@ -504,7 +504,11 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       background:rgba(12,14,22,.92);border:1px solid rgba(245,166,35,.35);border-radius:6px;
       padding:8px 10px;font-family:'Share Tech Mono',monospace;min-width:240px;max-width:300px;
       backdrop-filter:blur(4px);pointer-events:all;">
-      <div style="font-size:9px;color:var(--go);letter-spacing:2px;margin-bottom:6px;">LAYER STACK</div>
+      <div id="layerStackHeader" onclick="toggleLayerStackCollapse()" title="Click to collapse / expand layers"
+        style="font-size:9px;color:var(--go);letter-spacing:2px;margin-bottom:6px;cursor:pointer;
+               user-select:none;display:flex;align-items:center;gap:6px;">
+        <span id="layerStackChevron" style="font-size:9px;line-height:1;">&#9662;</span><span>LAYER STACK</span>
+      </div>
       <div id="layerStackBody" style="display:flex;flex-direction:column;gap:2px;"></div>
     </div>
     <canvas id="c2d" width="760" height="530"></canvas>
@@ -941,7 +945,43 @@ function newStability(hasInterlock, supportPct, centeringPct, ovW, ovL){
   return r2((interlock + support + centering + overhang) * 100);
 }
 
+// ── Tidy offset wrapper ───────────────────────────────────────
+// The edge offset resizes the build area. A positive offset is treated as
+// "tidy" (lay out as if 0, never spread cases past the pallet). A negative
+// offset (underhang) builds a normal tidy pattern on the smaller footprint,
+// then centers it on the real pallet. Offset 0 calls the core unchanged.
 function buildPatterns(cW, cL, pW, pL){
+  const _OH=(ST.maxOverhang===''||ST.maxOverhang===null||ST.maxOverhang===undefined)?0:parseFloat(ST.maxOverhang)||0;
+  const _ohIn=ST.isMetric?_OH/25.4:_OH;
+  const d=_ohIn<0?-_ohIn:0;                 // per-side inset for underhang; positive offset ignored (tidy)
+  const _saved=ST.maxOverhang;
+  ST.maxOverhang='0';                        // build with no overhang on the (possibly smaller) pallet
+  let pats;
+  try { pats=_bpCore(cW, cL, pW-2*d, pL-2*d); }
+  finally { ST.maxOverhang=_saved; }
+  if(d>0 && pats && pats.length){
+    const realArea=pW*pL, rr=v=>Math.round(v*1e6)/1e6, r2v=v=>Math.round(v*100)/100;
+    const shift=p2=>({...p2, x:rr(p2.x+d), y:rr(p2.y+d)});
+    pats.forEach(p=>{
+      p.placements=(p.placements||[]).map(shift);
+      if(p.placementsB) p.placementsB=p.placementsB.map(shift);
+      const pls=p.placements;
+      if(pls.length){
+        const mnx=Math.min(...pls.map(q=>q.x)), mxx=Math.max(...pls.map(q=>q.x+q.w));
+        const mny=Math.min(...pls.map(q=>q.y)), mxy=Math.max(...pls.map(q=>q.y+q.l));
+        p.ohW=r2v(((mxx-mnx)-pW)/2);
+        p.ohL=r2v(((mxy-mny)-pL)/2);
+        const caseArea=pls.reduce((s,q)=>s+q.w*q.l,0);
+        p.cubicEff=r2v(caseArea/realArea*100);
+        p.palUtilPct=p.cubicEff;
+      }
+      p.zoneW=pW; p.zoneL=pL;
+    });
+  }
+  return pats;
+}
+
+function _bpCore(cW, cL, pW, pL){
   // ═══════════════════════════════════════════════════════════════════
   // BETSEL STACK PATTERN ENGINE v5
   // Exhaustive search: enumerates every structurally distinct row
@@ -1202,19 +1242,85 @@ function buildPatterns(cW, cL, pW, pL){
   const fpOf=pls=>[...pls].sort((a,b)=>a.y!==b.y?a.y-b.y:a.x-b.x)
     .map(p=>Math.round(p.x*R)+'_'+Math.round(p.y*R)+'_'+Math.round(p.w*R)+'_'+Math.round(p.l*R)+'_'+p.ori).join('|');
 
+  // Distribute every column of cases vertically within the space available to
+  // it (bounded by the surrounding cases and the pallet edges), so cases flush
+  // the perimeter with even interior gaps instead of clustering to one end.
+  // This runs identically at every edge offset (offset patterns are built on a
+  // resized pallet), so 0", positive, and negative all distribute the same way.
+  const distributeFills=(pls,pW,pL)=>{
+    if(pls.length<2) return pls;
+    const cols=new Map();
+    pls.forEach((p,i)=>{const key=Math.round(p.x*10)/10;if(!cols.has(key))cols.set(key,[]);cols.get(key).push({p,i});});
+    const out=pls.map(p=>({...p}));
+    cols.forEach(colArr=>{
+      if(colArr.length<2) return;
+      const idxSet=new Set(colArr.map(o=>o.i));
+      const xs=Math.min(...colArr.map(o=>o.p.x)), xe=Math.max(...colArr.map(o=>o.p.x+o.p.w));
+      const colTop=Math.min(...colArr.map(o=>o.p.y));
+      const colBot=Math.max(...colArr.map(o=>o.p.y+o.p.l));
+      let top=0, bot=pL;
+      pls.forEach((q,qi)=>{
+        if(idxSet.has(qi)) return;
+        if(q.x<xe-0.05&&q.x+q.w>xs+0.05){
+          if(q.y+q.l<=colTop+0.05) top=Math.max(top,q.y+q.l);
+          else if(q.y>=colBot-0.05) bot=Math.min(bot,q.y);
+        }
+      });
+      const sorted=colArr.slice().sort((a,b)=>a.p.y-b.p.y);
+      const totalH=sorted.reduce((s,o)=>s+o.p.l,0);
+      const slack=(bot-top)-totalH;
+      if(slack<=0.05) return;
+      const gap=slack/(sorted.length-1);
+      let y=top;
+      sorted.forEach(o=>{out[o.i]={...out[o.i],y:rp(y)}; y+=o.p.l+gap;});
+    });
+    return out;
+  };
+
   const addPat=(name,desc,rawPls,skipBillboard)=>{
     if(!rawPls||rawPls.length<1) return;
     const ohl=ohIn+EPS;
     let pls=rawPls.filter(p=>p.x>=-ohl&&p.y>=-ohl&&p.x+p.w<=pW+ohl&&p.y+p.l<=pL+ohl);
     if(pls.length<1||!validate(pls)) return;
     pls=recentre(pls);
-    if(!skipBillboard){
+    // Uniform grids — every case the same size and orientation (e.g. the pure
+    // column stacks) — stay tight and centered. Spreading them would only
+    // insert a gap between every case (the "spread grid" look we don't want).
+    // Only mixed-orientation patterns get distributed, so their fill cases can
+    // flush the perimeter and even out the leftover space.
+    const uniform=pls.every(p=>p.w===pls[0].w&&p.l===pls[0].l);
+    if(!skipBillboard && !uniform){
       // Best-effort billboard: pls is already valid here. If spreading
       // creates overlaps (common for multi-row-type patterns where rows
       // have different case widths), fall back to the pre-billboard
       // layout rather than discarding the whole pattern.
       const spread=recentre(billboardToTargets(pls));
       if(validate(spread)) pls=spread;
+
+      // Flush pass: some hybrid patterns (e.g. header + side-column) can't be
+      // spread row-by-row without overlapping, so billboard leaves them tight
+      // and centered with a bare margin around them. Here we expand the case
+      // POSITIONS outward so the outermost cases reach the perimeter, with the
+      // slack distributed across the interior. Scaling positions outward only
+      // ever increases spacing, so it cannot create an overlap, and columns
+      // (cases sharing an x) stay aligned. Patterns already flush on an axis
+      // are left exactly as-is on that axis, so column stacks and full
+      // multi-row layouts are untouched.
+      const eMnX=Math.min(...pls.map(p=>p.x)), eMxX=Math.max(...pls.map(p=>p.x+p.w));
+      const eMnY=Math.min(...pls.map(p=>p.y)), eMxY=Math.max(...pls.map(p=>p.y+p.l));
+      const needX=(eMxX-eMnX)<targetW-0.1, needY=(eMxY-eMnY)<targetL-0.1;
+      if(needX||needY){
+        const loX=rp((pW-targetW)/2), loY=rp((pL-targetL)/2);
+        let kx=1, ky=1;
+        if(needX){ const rC=pls.reduce((m,p)=>p.x+p.w>m.x+m.w?p:m); const dX=(eMxX-rC.w)-eMnX; if(dX>0.05) kx=Math.max((targetW-rC.w)/dX,1); }
+        if(needY){ const bC=pls.reduce((m,p)=>p.y+p.l>m.y+m.l?p:m); const dY=(eMxY-bC.l)-eMnY; if(dY>0.05) ky=Math.max((targetL-bC.l)/dY,1); }
+        const ex=pls.map(p=>({...p,
+          x: needX ? rp(loX+(p.x-eMnX)*kx) : p.x,
+          y: needY ? rp(loY+(p.y-eMnY)*ky) : p.y }));
+        if(validate(ex)) pls=ex;
+      }
+      const dist=distributeFills(pls,pW,pL);
+      if(validate(dist)) pls=dist;
     }
     if(!validate(pls)) return;
     const TI=pls.length; if(TI<1) return;
@@ -2090,7 +2196,13 @@ function buildPatterns(cW, cL, pW, pL){
   const result=[...rest.slice(0,Math.max(0,MAX_RESULTS-forced.length)),...forced];
 
   result.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
-  return result;
+
+  // Top of the list is always the two pure column stacks (the cleanest, most
+  // stackable layouts), with the higher case-count of the two leading. Every
+  // other pattern keeps its existing rank order below them.
+  const colStacks=forced.slice().sort((a,b)=>b.TI-a.TI);
+  const others=result.filter(p=>!forced.includes(p));
+  return [...colStacks, ...others];
 }
 
 
@@ -3019,7 +3131,24 @@ function renderLayerStack(){
     );
   }
   body.innerHTML = rows.join('');
-  panel.style.display = 'block';
+  panel.style.display = (ST.view==='2d') ? 'block' : 'none';
+  applyLayerStackCollapse();
+}
+
+// ── Layer Stack collapse/expand (2D view only) ─────────────────
+// The Layer Stack panel only ever renders in the 2D view, so this
+// toggle is inherently 2D-only. Clicking the header hides/show the
+// per-layer rows while leaving the header visible as the toggle.
+let layerStackCollapsed = false;
+function toggleLayerStackCollapse(){
+  layerStackCollapsed = !layerStackCollapsed;
+  applyLayerStackCollapse();
+}
+function applyLayerStackCollapse(){
+  const body = document.getElementById('layerStackBody');
+  const chev = document.getElementById('layerStackChevron');
+  if(body) body.style.display = layerStackCollapsed ? 'none' : 'flex';
+  if(chev) chev.innerHTML = layerStackCollapsed ? '&#9656;' : '&#9662;';
 }
 
 function leSelectLayerIdx(idx){
