@@ -945,31 +945,36 @@ function newStability(hasInterlock, supportPct, centeringPct, ovW, ovL){
   return r2((interlock + support + centering + overhang) * 100);
 }
 
-// ── Tidy offset wrapper ───────────────────────────────────────
-// The edge offset resizes the build area. A positive offset is treated as
-// "tidy" (lay out as if 0, never spread cases past the pallet). A negative
-// offset (underhang) builds a normal tidy pattern on the smaller footprint,
-// then centers it on the real pallet. Offset 0 calls the core unchanged.
+// ── Edge-offset wrapper ───────────────────────────────────────
+// The edge offset resizes the build perimeter the cases are allowed to fill:
+//   positive  -> perimeter EXPANDS beyond the pallet (overhang allowed)
+//   negative  -> perimeter SHRINKS inside the pallet (inset / underhang)
+//   zero      -> perimeter is exactly the pallet length x width
+// Every pattern is built on that one resized perimeter and then centered on the
+// real pallet, so all patterns down the list use the same perimeter and respond
+// to the offset identically.
 function buildPatterns(cW, cL, pW, pL){
   const _OH=(ST.maxOverhang===''||ST.maxOverhang===null||ST.maxOverhang===undefined)?0:parseFloat(ST.maxOverhang)||0;
   const _ohIn=ST.isMetric?_OH/25.4:_OH;
-  const d=_ohIn<0?-_ohIn:0;                 // per-side inset for underhang; positive offset ignored (tidy)
+  const buildW=pW+2*_ohIn, buildL=pL+2*_ohIn;   // + expands, - shrinks
+  const shift=-_ohIn;                            // re-center the build area on the pallet
+  if(buildW<=0||buildL<=0) return [];
   const _saved=ST.maxOverhang;
-  ST.maxOverhang='0';                        // build with no overhang on the (possibly smaller) pallet
+  ST.maxOverhang='0';                            // distribute within the resized perimeter
   let pats;
-  try { pats=_bpCore(cW, cL, pW-2*d, pL-2*d); }
+  try { pats=_bpCore(cW, cL, buildW, buildL); }
   finally { ST.maxOverhang=_saved; }
-  if(d>0 && pats && pats.length){
+  if(_ohIn!==0 && pats && pats.length){
     const realArea=pW*pL, rr=v=>Math.round(v*1e6)/1e6, r2v=v=>Math.round(v*100)/100;
-    const shift=p2=>({...p2, x:rr(p2.x+d), y:rr(p2.y+d)});
+    const sh=p2=>({...p2, x:rr(p2.x+shift), y:rr(p2.y+shift)});
     pats.forEach(p=>{
-      p.placements=(p.placements||[]).map(shift);
-      if(p.placementsB) p.placementsB=p.placementsB.map(shift);
+      p.placements=(p.placements||[]).map(sh);
+      if(p.placementsB) p.placementsB=p.placementsB.map(sh);
       const pls=p.placements;
       if(pls.length){
         const mnx=Math.min(...pls.map(q=>q.x)), mxx=Math.max(...pls.map(q=>q.x+q.w));
         const mny=Math.min(...pls.map(q=>q.y)), mxy=Math.max(...pls.map(q=>q.y+q.l));
-        p.ohW=r2v(((mxx-mnx)-pW)/2);
+        p.ohW=r2v(((mxx-mnx)-pW)/2);             // + = overhang, - = inset
         p.ohL=r2v(((mxy-mny)-pL)/2);
         const caseArea=pls.reduce((s,q)=>s+q.w*q.l,0);
         p.cubicEff=r2v(caseArea/realArea*100);
@@ -1024,9 +1029,14 @@ function _bpCore(cW, cL, pW, pL){
   // reach these edges when its case count allows.
   const targetW=maxW;
   const targetL=maxL;
+  // Cases distribute with small, even gaps (not spread to the perimeter); any
+  // remaining space becomes a centered margin, the way real pallets are stacked.
+  const MAXGAP=2;
 
   // ── Utilities ────────────────────────────────────────────────────
   const rot180=pls=>pls.map(p=>({...p,x:rp(pW-p.x-p.w),y:rp(pL-p.y-p.l)}));
+  const flipX=pls=>pls.map(p=>({...p,x:rp(pW-p.x-p.w)}));  // left-right mirror
+  const flipY=pls=>pls.map(p=>({...p,y:rp(pL-p.y-p.l)}));  // top-bottom mirror
 
   const validate=pls=>{
     const ohl=ohIn+EPS;
@@ -1141,7 +1151,8 @@ function _bpCore(cW, cL, pW, pL){
         return;
       }
       if(n===1){stage1.push({...s[0],x:rp(xLo+(targetW-s[0].w)/2)});return;}
-      const gap=(targetW-totalW)/(n-1);let x=xLo;
+      const gap=Math.min((targetW-totalW)/(n-1),MAXGAP);
+      let x=rp(xLo+(targetW-(totalW+gap*(n-1)))/2);
       s.forEach((p,i)=>{stage1.push({...p,x:rp(x)});x=rp(x+p.w+(i<n-1?gap:0));});
     });
     if(!validate(stage1)) stage1=pls; // revert row pass if it broke validity
@@ -1176,9 +1187,9 @@ function _bpCore(cW, cL, pW, pL){
       const shift=rp(yLo+(targetL-bands[0].depth)/2-bands[0].y);
       stage2=stage1.map(p=>({...p,y:rp(p.y+shift)}));
     } else {
-      const gap=(targetL-totalDepth)/(n-1);
+      const gap=Math.min((targetL-totalDepth)/(n-1),MAXGAP);
       const bandShift=new Map();
-      let curY=yLo;
+      let curY=rp(yLo+(targetL-(totalDepth+gap*(n-1)))/2);
       bands.forEach((b,i)=>{
         bandShift.set(b.y, rp(curY-b.y));
         curY=rp(curY+b.depth+(i<n-1?gap:0));
@@ -1237,10 +1248,31 @@ function _bpCore(cW, cL, pW, pL){
   // ── Pattern registry ─────────────────────────────────────────────
   const PATS=[];
   const seenFP=new Map();
+  const seenGeo=[];      // accepted patterns' normalised geometry, for tolerant 180°-turn dedup
   const R=100;
 
   const fpOf=pls=>[...pls].sort((a,b)=>a.y!==b.y?a.y-b.y:a.x-b.x)
     .map(p=>Math.round(p.x*R)+'_'+Math.round(p.y*R)+'_'+Math.round(p.w*R)+'_'+Math.round(p.l*R)+'_'+p.ori).join('|');
+
+  // ── Tolerant turn/mirror duplicate detection ────────────────────────
+  // Two patterns are the same pallet just turned or flipped if, after sliding
+  // both to a common corner, every case in one maps to a same-size case in a
+  // turned/mirrored copy of the other. The auto-spread/gap-distribution passes
+  // can nudge such patterns apart by up to MAXGAP, so the match allows that
+  // much slack — but no more, so genuinely different layouts (brick vs inset,
+  // different orientation counts, etc.) are kept.
+  const _msKey=a=>a.map(p=>Math.min(p.w,p.l)+'-'+Math.max(p.w,p.l)).sort().join('|')+'#'+a.length;
+  const _norm=a=>{const mx=Math.min(...a.map(p=>p.x)),my=Math.min(...a.map(p=>p.y));
+    return a.map(p=>({x:p.x-mx,y:p.y-my,w:p.w,l:p.l}));};
+  const _closeMatch=(A,B)=>{ // A,B normalised; true if a same-size bijection exists within MAXGAP
+    if(A.length!==B.length) return false;
+    const used=new Array(B.length).fill(false);
+    for(const pa of A){ let best=-1,bd=Infinity;
+      for(let j=0;j<B.length;j++){ if(used[j]||B[j].w!==pa.w||B[j].l!==pa.l) continue;
+        const d=Math.abs(B[j].x-pa.x)+Math.abs(B[j].y-pa.y); if(d<bd){bd=d;best=j;} }
+      if(best<0||bd>MAXGAP+EPS) return false; used[best]=true; }
+    return true;
+  };
 
   // Distribute every column of cases vertically within the space available to
   // it (bounded by the surrounding cases and the pallet edges), so cases flush
@@ -1270,8 +1302,8 @@ function _bpCore(cW, cL, pW, pL){
       const totalH=sorted.reduce((s,o)=>s+o.p.l,0);
       const slack=(bot-top)-totalH;
       if(slack<=0.05) return;
-      const gap=slack/(sorted.length-1);
-      let y=top;
+      const gap=Math.min(slack/(sorted.length-1),MAXGAP);
+      let y=top+(slack-gap*(sorted.length-1))/2;
       sorted.forEach(o=>{out[o.i]={...out[o.i],y:rp(y)}; y+=o.p.l+gap;});
     });
     return out;
@@ -1297,38 +1329,27 @@ function _bpCore(cW, cL, pW, pL){
       const spread=recentre(billboardToTargets(pls));
       if(validate(spread)) pls=spread;
 
-      // Flush pass: some hybrid patterns (e.g. header + side-column) can't be
-      // spread row-by-row without overlapping, so billboard leaves them tight
-      // and centered with a bare margin around them. Here we expand the case
-      // POSITIONS outward so the outermost cases reach the perimeter, with the
-      // slack distributed across the interior. Scaling positions outward only
-      // ever increases spacing, so it cannot create an overlap, and columns
-      // (cases sharing an x) stay aligned. Patterns already flush on an axis
-      // are left exactly as-is on that axis, so column stacks and full
-      // multi-row layouts are untouched.
-      const eMnX=Math.min(...pls.map(p=>p.x)), eMxX=Math.max(...pls.map(p=>p.x+p.w));
-      const eMnY=Math.min(...pls.map(p=>p.y)), eMxY=Math.max(...pls.map(p=>p.y+p.l));
-      const needX=(eMxX-eMnX)<targetW-0.1, needY=(eMxY-eMnY)<targetL-0.1;
-      if(needX||needY){
-        const loX=rp((pW-targetW)/2), loY=rp((pL-targetL)/2);
-        let kx=1, ky=1;
-        if(needX){ const rC=pls.reduce((m,p)=>p.x+p.w>m.x+m.w?p:m); const dX=(eMxX-rC.w)-eMnX; if(dX>0.05) kx=Math.max((targetW-rC.w)/dX,1); }
-        if(needY){ const bC=pls.reduce((m,p)=>p.y+p.l>m.y+m.l?p:m); const dY=(eMxY-bC.l)-eMnY; if(dY>0.05) ky=Math.max((targetL-bC.l)/dY,1); }
-        const ex=pls.map(p=>({...p,
-          x: needX ? rp(loX+(p.x-eMnX)*kx) : p.x,
-          y: needY ? rp(loY+(p.y-eMnY)*ky) : p.y }));
-        if(validate(ex)) pls=ex;
-      }
       const dist=distributeFills(pls,pW,pL);
       if(validate(dist)) pls=dist;
     }
     if(!validate(pls)) return;
     const TI=pls.length; if(TI<1) return;
-    // Fingerprint — catches exact duplicates and rot180 equivalents
+    // Fingerprint — catches exact duplicates and exact rot180 equivalents
     const k=fpOf(pls);
     const kr=fpOf(rot180(pls));
     if(seenFP.has(k)||seenFP.has(kr)) return;
+    // Tolerant turn/mirror dedup — drop a pattern that is the same as one
+    // already accepted once the pallet is turned 180° or mirrored left-right
+    // or top-bottom (allowing for gap-distribution jitter up to MAXGAP).
+    // flipX∘flipY == rot180, so these three cover the pallet's full symmetry.
+    const myMs=_msKey(pls);
+    const myVariants=[_norm(rot180(pls)), _norm(flipX(pls)), _norm(flipY(pls))];
+    for(const ent of seenGeo){
+      if(ent.ms!==myMs) continue;
+      if(myVariants.some(v=>_closeMatch(ent.norm,v))) return;
+    }
     seenFP.set(k,true);
+    seenGeo.push({ms:myMs, norm:_norm(pls)});
     // Interlock: rot180, realigned to same bbox
     const rawB=rot180(pls);
     const mnXA=Math.min(...pls.map(p=>p.x)),mnYA=Math.min(...pls.map(p=>p.y));
@@ -2209,13 +2230,23 @@ function _bpCore(cW, cL, pW, pL){
 
 
 // ═══════════════════════════════════════════════════════════════
+// Rotate a layer's placements 180° about the pallet centre (interlock turn).
+function _rot180Layer(pls, pat){
+  const W=(pat&&pat.masterW)||0, L=(pat&&pat.masterL)||0;
+  if(!W||!L||!pls) return pls;
+  return pls.map(p=>({...p, x:Math.round((W-p.x-p.w)*1e6)/1e6, y:Math.round((L-p.y-p.l)*1e6)/1e6}));
+}
 function getPlsForLayer(layerIdx){
   if(ST.multiMode) return ST.placements;
   if(!ST.patterns.length) return [];
   const pat = ST.patterns[ST.selPat];
   const key = String(layerIdx);
   if(ST.layerEdits && ST.layerEdits[key] !== undefined){
-    return ST.layerEdits[key];
+    // Edited layer: interlock still applies — odd layers get the 180° turn.
+    // Edits are stored in the un-rotated base frame, so the turn stays correct
+    // no matter how many times interlock is toggled.
+    const turn = ST.interlockMode && layerIdx%2===1;
+    return turn ? _rot180Layer(ST.layerEdits[key], pat) : ST.layerEdits[key];
   }
   // Multi-case manual build: no edits yet = empty layer (user builds from scratch)
   if(pat.multiCaseManual) return [];
@@ -3014,10 +3045,10 @@ function leGetPlacements(layer) {
     if(pat.multiCaseManual){
       ST.layerEdits[key] = [];
     } else {
-      // Single-case: initialise from pattern placements
-      const useB = pat.placementsB && pat.placements !== pat.placementsB && idx%2===1;
-      const src = useB ? pat.placementsB : pat.placements;
-      ST.layerEdits[key] = src.map(p => ({...p}));
+      // Single-case: initialise from the base (layer-A) placements. The 180°
+      // interlock turn is applied at display time in getPlsForLayer, so edits
+      // are always stored un-rotated — keeping interlock toggling consistent.
+      ST.layerEdits[key] = pat.placements.map(p => ({...p}));
     }
   }
   return ST.layerEdits[key];
@@ -6441,7 +6472,6 @@ function renderStats(){
   const warnings=[];
   if(ST.maxH&&s.overLimit) warnings.push('<div class="aw w">⚠ EXCEEDS MAX HEIGHT</div>');
   else if(ST.maxH) warnings.push('<div class="aw ok">✓ Within height limit</div>');
-  if(s.ohUnsafe) warnings.push('<div class="aw w">⚠ Overhang exceeds safe limit</div>');
   document.getElementById('maxHA').innerHTML=warnings.join('');
 }
 function renderTable(){
