@@ -9023,6 +9023,8 @@ function rbLoadTemplate(name){
       {type:'divider',  x:PAD, y:1070, w:794-2*PAD, h:10, props:{color:'#ddd', thickness:1}},
       {type:'subtext',  x:PAD, y:1082, w:400, h:20,
         props:{text:KBM_SETTINGS.footerText||'CONFIDENTIAL — Internal Use Only', fontSize:8, color:'#999', align:'left'}},
+      {type:'subtext',  x:794-PAD-300, y:1082, w:300, h:20,
+        props:{text:KBM_SETTINGS.preparer ? ('Prepared by: '+KBM_SETTINGS.preparer) : '', fontSize:8, color:'#999', align:'right'}},
     ];
     blocks.forEach(b=>{ b.id='rb_'+(RB._nextId++); if(!b.props) b.props=rbDefaultProps(b.type); });
     RB.blocks=blocks;
@@ -9060,6 +9062,8 @@ function rbLoadTemplate(name){
       {type:'divider', x:PAD, y:1070, w:794-2*PAD, h:10, props:{color:'#ddd', thickness:1}},
       {type:'subtext', x:PAD, y:1082, w:400, h:20,
         props:{text:KBM_SETTINGS.footerText||'CONFIDENTIAL — Internal Use Only', fontSize:8, color:'#999', align:'left'}},
+      {type:'subtext', x:794-PAD-300, y:1082, w:300, h:20,
+        props:{text:KBM_SETTINGS.preparer ? ('Prepared by: '+KBM_SETTINGS.preparer) : '', fontSize:8, color:'#999', align:'right'}},
     ];
     blocks.forEach(b=>{ b.id='rb_'+(RB._nextId++); if(!b.props) b.props=rbDefaultProps(b.type); });
     RB.blocks=blocks;
