@@ -7515,6 +7515,37 @@ function _saveSettings(){
   try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(KBM_SETTINGS)); }catch(e){}
 }
 
+// ── Cloud settings (per-user, durable) ───────────────────────
+// Persists settings to the signed-in user's account so they survive new
+// patterns, logout/login, and switching browsers or devices. localStorage
+// above stays as an instant local cache / loose-file fallback. Both calls
+// no-op gracefully when the tool runs outside the signed-in app.
+const SETTINGS_API = '/api/settings';
+async function _loadSettingsCloud(){
+  try{
+    const res = await fetch(SETTINGS_API, { credentials:'same-origin' });
+    if(!res.ok) return;
+    const row = await res.json();
+    if(row && row.data && typeof row.data === 'object'){
+      Object.assign(KBM_SETTINGS, row.data);  // cloud is source of truth for this user
+      _saveSettings();                         // mirror into the local cache
+      _applySettings();
+      const ov = document.getElementById('kbmOverlay');
+      if(ov && ov.classList.contains('open')) mnuSettingsRefresh();
+    }
+  }catch(e){ /* offline or loose file — keep local settings */ }
+}
+async function _saveSettingsCloud(){
+  try{
+    await fetch(SETTINGS_API, {
+      method:'PUT',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      body: JSON.stringify({ data: KBM_SETTINGS })
+    });
+  }catch(e){ /* offline — the localStorage copy still holds the change */ }
+}
+
 // Apply loaded settings to the UI (called once on init and after settings save)
 function _applySettings(){
   // Units
@@ -8010,7 +8041,7 @@ function kbmLogoClear(){
   document.getElementById('cfg_logoFile').value='';
 }
 
-function mnuSettings(){
+function mnuSettingsRefresh(){
   // App tab
   document.getElementById('cfg_units').value    = KBM_SETTINGS.units;
   document.getElementById('cfg_pallet').value   = KBM_SETTINGS.pallet;
@@ -8031,6 +8062,9 @@ function mnuSettings(){
   } else {
     document.getElementById('cfg_logoPreview').style.display='none';
   }
+}
+function mnuSettings(){
+  mnuSettingsRefresh();
   kbmTab('app');
   document.getElementById('kbmOverlay').classList.add('open');
 }
@@ -8053,6 +8087,7 @@ function mnuSettingsSave(){
   KBM_SETTINGS.preparer    = document.getElementById('cfg_preparer').value;
   KBM_SETTINGS.aiRecs      = document.getElementById('cfg_aiRecs').value==='1';
   _saveSettings();
+  _saveSettingsCloud();
   _applySettings();
   mnuSettingsClose();
 }
@@ -8083,7 +8118,8 @@ function mnuAbout(){
 }
 
 // ── Load persisted settings on startup ───────────────────────
-_loadSettings();
+_loadSettings();       // instant: local cache
+_loadSettingsCloud();  // then sync the user's durable cloud copy on top
 
 // ═══════════════════════════════════════════════════════════════
 // REPORT BUILDER — Visual drag-and-drop report canvas
