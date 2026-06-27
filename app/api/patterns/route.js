@@ -125,3 +125,41 @@ export async function DELETE(request) {
 
   return NextResponse.json({ deleted: (data || []).map((r) => r.id) });
 }
+
+// PATCH /api/patterns  -> rename the signed-in user's saved pattern.
+//   Body: { id: <uuid>, name: <string> }. Only the caller's own row is touched.
+export async function PATCH(request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  const access = await getAccess(supabase, user.id);
+  if (!access.allowed) return new NextResponse("Subscription required", { status: 403 });
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new NextResponse("Invalid JSON", { status: 400 });
+  }
+  const id = typeof body?.id === "string" ? body.id : "";
+  const name =
+    typeof body?.name === "string" && body.name.trim()
+      ? body.name.trim().slice(0, 120)
+      : "";
+  if (!id) return new NextResponse("Missing id", { status: 400 });
+  if (!name) return new NextResponse("Missing name", { status: 400 });
+
+  const { data, error } = await supabase
+    .from("patterns")
+    .update({ name })
+    .eq("id", id)
+    .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
+    .select("id, name, updated_at")
+    .single();
+  if (error) return new NextResponse(error.message, { status: error.code === "PGRST116" ? 404 : 500 });
+
+  return NextResponse.json(data);
+}
