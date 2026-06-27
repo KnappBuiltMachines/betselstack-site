@@ -7922,20 +7922,64 @@ function _closeCloudModal(){
   if(ov) ov.style.display = 'none';
 }
 
-// Enable/label the Delete button based on how many rows are checked.
+// Enable/label the Delete + Rename buttons based on how many rows are checked.
 function _cloudUpdateDelBtn(){
   const boxes = Array.prototype.slice.call(
     document.querySelectorAll('#_cloudList input[type=checkbox][data-id]'));
   const n = boxes.filter(function(b){ return b.checked; }).length;
   const btn = document.getElementById('_cloudDelBtn');
-  if(!btn) return;
-  btn.disabled = (n === 0);
-  btn.textContent = n > 0 ? ('Delete (' + n + ')') : 'Delete';
-  btn.style.opacity = n === 0 ? '0.45' : '1';
-  btn.style.cursor  = n === 0 ? 'default' : 'pointer';
+  if(btn){
+    btn.disabled = (n === 0);
+    btn.textContent = n > 0 ? ('Delete (' + n + ')') : 'Delete';
+    btn.style.opacity = n === 0 ? '0.45' : '1';
+    btn.style.cursor  = n === 0 ? 'default' : 'pointer';
+  }
+  // Rename only makes sense for exactly one selected file.
+  const rbtn = document.getElementById('_cloudRenBtn');
+  if(rbtn){
+    rbtn.disabled = (n !== 1);
+    rbtn.style.opacity = n === 1 ? '1' : '0.45';
+    rbtn.style.cursor  = n === 1 ? 'pointer' : 'default';
+    rbtn.title = n === 1 ? 'Rename the selected file'
+      : (n === 0 ? 'Select one file to rename' : 'Select only one file to rename');
+  }
   // keep the select-all box in sync
   const all = document.getElementById('_cloudSelAll');
   if(all) all.checked = (n > 0 && n === boxes.length);
+}
+
+// Rename the single checked pattern; the new name is saved to the cloud.
+async function _cloudRenameSelected(){
+  const boxes = Array.prototype.slice.call(
+    document.querySelectorAll('#_cloudList input[type=checkbox][data-id]'));
+  const checked = boxes.filter(function(b){ return b.checked; });
+  if(checked.length !== 1) return;
+  const id = checked[0].getAttribute('data-id');
+  const cur = checked[0].getAttribute('data-name') || '';
+  const next = window.prompt('Rename file:', cur);
+  if(next === null) return;                 // cancelled
+  const name = next.trim();
+  if(!name){ _showNotification('Name cannot be empty', true); return; }
+  if(name === cur){ return; }                // unchanged
+  const rbtn = document.getElementById('_cloudRenBtn');
+  if(rbtn){ rbtn.disabled = true; rbtn.textContent = 'Saving...'; }
+  try{
+    const res = await fetch('/api/patterns', {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      body: JSON.stringify({ id: id, name: name })
+    });
+    if(!res.ok){
+      _showNotification('Rename failed (HTTP ' + res.status + ')', true);
+    } else {
+      _showNotification('Renamed to "' + name + '"', false);
+    }
+  } catch(err){
+    _showNotification('Rename failed: '
+      + (err && err.message ? err.message : 'network error'), true);
+  }
+  _openCloudModal();   // refresh list (re-fetches, clears selection + resets buttons)
 }
 
 // Delete the checked patterns from the cloud (single or multiple).
@@ -7996,6 +8040,9 @@ async function _openCloudModal(){
     + 'align-items:center;justify-content:space-between;gap:10px;">'
     + '<span style="font-size:14px;letter-spacing:1px;color:#f5a623;">OPEN FROM CLOUD</span>'
     + '<div style="display:flex;align-items:center;gap:14px;">'
+    + '<button id="_cloudRenBtn" disabled style="background:#23303a;color:#7bb6e0;'
+    + 'border:1px solid #2a4a6a;border-radius:4px;padding:5px 12px;font-size:12px;'
+    + 'cursor:default;opacity:.45;font-family:inherit;">Rename</button>'
     + '<button id="_cloudDelBtn" disabled style="background:#3a2020;color:#e06b6b;'
     + 'border:1px solid #6a2a2a;border-radius:4px;padding:5px 12px;font-size:12px;'
     + 'cursor:default;opacity:.45;font-family:inherit;">Delete</button>'
@@ -8005,6 +8052,7 @@ async function _openCloudModal(){
     + '<div style="padding:18px;">Loading...</div></div>';
   document.getElementById('_cloudClose').onclick = _closeCloudModal;
   document.getElementById('_cloudDelBtn').onclick = _cloudDeleteSelected;
+  document.getElementById('_cloudRenBtn').onclick = _cloudRenameSelected;
 
   const list = document.getElementById('_cloudList');
   try{
@@ -8048,6 +8096,7 @@ async function _openCloudModal(){
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.setAttribute('data-id', r.id);
+      cb.setAttribute('data-name', r.name || '');
       cb.style.cssText = 'width:16px;height:16px;cursor:pointer;flex:none;accent-color:#f5a623;';
       cb.onclick = function(e){ e.stopPropagation(); };
       cb.onchange = _cloudUpdateDelBtn;
