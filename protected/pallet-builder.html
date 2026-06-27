@@ -7922,6 +7922,56 @@ function _closeCloudModal(){
   if(ov) ov.style.display = 'none';
 }
 
+// Enable/label the Delete button based on how many rows are checked.
+function _cloudUpdateDelBtn(){
+  const boxes = Array.prototype.slice.call(
+    document.querySelectorAll('#_cloudList input[type=checkbox][data-id]'));
+  const n = boxes.filter(function(b){ return b.checked; }).length;
+  const btn = document.getElementById('_cloudDelBtn');
+  if(!btn) return;
+  btn.disabled = (n === 0);
+  btn.textContent = n > 0 ? ('Delete (' + n + ')') : 'Delete';
+  btn.style.opacity = n === 0 ? '0.45' : '1';
+  btn.style.cursor  = n === 0 ? 'default' : 'pointer';
+  // keep the select-all box in sync
+  const all = document.getElementById('_cloudSelAll');
+  if(all) all.checked = (n > 0 && n === boxes.length);
+}
+
+// Delete the checked patterns from the cloud (single or multiple).
+async function _cloudDeleteSelected(){
+  const boxes = Array.prototype.slice.call(
+    document.querySelectorAll('#_cloudList input[type=checkbox][data-id]'));
+  const ids = boxes.filter(function(b){ return b.checked; })
+                   .map(function(b){ return b.getAttribute('data-id'); });
+  if(!ids.length) return;
+  const msg = 'Delete ' + ids.length + ' saved '
+    + (ids.length === 1 ? 'pattern' : 'patterns')
+    + ' from the cloud?\nThis cannot be undone.';
+  if(!window.confirm(msg)) return;
+  const btn = document.getElementById('_cloudDelBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Deleting...'; }
+  try{
+    const res = await fetch('/api/patterns', {
+      method:'DELETE',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      body: JSON.stringify({ ids: ids })
+    });
+    if(!res.ok){
+      _showNotification('Delete failed (HTTP ' + res.status + ')', true);
+    } else {
+      const out = await res.json().catch(function(){ return {}; });
+      const n = (out && out.deleted && out.deleted.length) || ids.length;
+      _showNotification('Deleted ' + n + ' pattern' + (n === 1 ? '' : 's') + ' from cloud', false);
+    }
+  } catch(err){
+    _showNotification('Delete failed: '
+      + (err && err.message ? err.message : 'network error'), true);
+  }
+  _openCloudModal();   // refresh list (re-fetches, clears selection + resets button)
+}
+
 async function _openCloudModal(){
   let ov = document.getElementById('_cloudOpenOverlay');
   if(!ov){
@@ -7943,12 +7993,18 @@ async function _openCloudModal(){
   const panel = document.getElementById('_cloudOpenPanel');
   panel.innerHTML =
       '<div style="padding:14px 18px;border-bottom:1px solid #333;display:flex;'
-    + 'align-items:center;justify-content:space-between;">'
+    + 'align-items:center;justify-content:space-between;gap:10px;">'
     + '<span style="font-size:14px;letter-spacing:1px;color:#f5a623;">OPEN FROM CLOUD</span>'
-    + '<span id="_cloudClose" style="cursor:pointer;font-size:18px;color:#888;">&times;</span></div>'
+    + '<div style="display:flex;align-items:center;gap:14px;">'
+    + '<button id="_cloudDelBtn" disabled style="background:#3a2020;color:#e06b6b;'
+    + 'border:1px solid #6a2a2a;border-radius:4px;padding:5px 12px;font-size:12px;'
+    + 'cursor:default;opacity:.45;font-family:inherit;">Delete</button>'
+    + '<span id="_cloudClose" style="cursor:pointer;font-size:18px;color:#888;">&times;</span>'
+    + '</div></div>'
     + '<div id="_cloudList" style="padding:8px 0;color:#999;text-align:center;">'
     + '<div style="padding:18px;">Loading...</div></div>';
   document.getElementById('_cloudClose').onclick = _closeCloudModal;
+  document.getElementById('_cloudDelBtn').onclick = _cloudDeleteSelected;
 
   const list = document.getElementById('_cloudList');
   try{
@@ -7964,20 +8020,50 @@ async function _openCloudModal(){
     }
     list.style.textAlign = 'left';
     list.innerHTML = '';
+    // Select-all toggle
+    const allRow = document.createElement('div');
+    allRow.style.cssText = 'padding:7px 18px;border-bottom:1px solid #333;display:flex;'
+      + 'align-items:center;gap:12px;background:#181818;';
+    const allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.id = '_cloudSelAll';
+    allCb.style.cssText = 'width:16px;height:16px;cursor:pointer;flex:none;accent-color:#f5a623;';
+    allCb.onchange = function(){
+      document.querySelectorAll('#_cloudList input[type=checkbox][data-id]')
+        .forEach(function(b){ b.checked = allCb.checked; });
+      _cloudUpdateDelBtn();
+    };
+    const allLbl = document.createElement('div');
+    allLbl.textContent = 'Select all';
+    allLbl.style.cssText = 'font-size:12px;color:#aaa;cursor:pointer;';
+    allLbl.onclick = function(){ allCb.checked = !allCb.checked; allCb.onchange(); };
+    allRow.appendChild(allCb); allRow.appendChild(allLbl);
+    list.appendChild(allRow);
     rows.forEach(function(r){
       const item = document.createElement('div');
-      item.style.cssText = 'padding:11px 18px;border-bottom:1px solid #2a2a2a;cursor:pointer;'
-        + 'display:flex;flex-direction:column;gap:2px;';
+      item.style.cssText = 'padding:9px 18px;border-bottom:1px solid #2a2a2a;'
+        + 'display:flex;align-items:center;gap:12px;';
       item.onmouseenter = function(){ item.style.background = '#262626'; };
       item.onmouseleave = function(){ item.style.background = 'transparent'; };
-      item.onclick = function(){ _loadCloudPattern(r.id, r.name); };
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.setAttribute('data-id', r.id);
+      cb.style.cssText = 'width:16px;height:16px;cursor:pointer;flex:none;accent-color:#f5a623;';
+      cb.onclick = function(e){ e.stopPropagation(); };
+      cb.onchange = _cloudUpdateDelBtn;
+      const txt = document.createElement('div');
+      txt.style.cssText = 'flex:1;min-width:0;cursor:pointer;display:flex;'
+        + 'flex-direction:column;gap:2px;';
+      txt.title = 'Open this pattern';
+      txt.onclick = function(){ _loadCloudPattern(r.id, r.name); };
       const nm = document.createElement('div');
       nm.textContent = r.name || 'Untitled pattern';
       nm.style.cssText = 'font-size:13px;color:#eee;';
       const dt = document.createElement('div');
       dt.textContent = _fmtCloudDate(r.updated_at || r.created_at);
       dt.style.cssText = 'font-size:11px;color:#888;';
-      item.appendChild(nm); item.appendChild(dt);
+      txt.appendChild(nm); txt.appendChild(dt);
+      item.appendChild(cb); item.appendChild(txt);
       list.appendChild(item);
     });
   } catch(err){
