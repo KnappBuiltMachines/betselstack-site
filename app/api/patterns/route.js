@@ -84,3 +84,44 @@ export async function POST(request) {
 
   return NextResponse.json(data, { status: 201 });
 }
+
+// DELETE /api/patterns  -> remove the signed-in user's saved pattern(s).
+//   Accepts a single ?id=<uuid> or a JSON body { ids: [<uuid>, ...] }.
+//   Only rows owned by the caller are ever deleted.
+export async function DELETE(request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  const access = await getAccess(supabase, user.id);
+  if (!access.allowed) return new NextResponse("Subscription required", { status: 403 });
+
+  // Collect ids from ?id= (single) or a JSON body { ids: [...] } (batch)
+  let ids = [];
+  const { searchParams } = new URL(request.url);
+  const qid = searchParams.get("id");
+  if (qid) {
+    ids = [qid];
+  } else {
+    try {
+      const body = await request.json();
+      if (Array.isArray(body?.ids)) ids = body.ids;
+    } catch {
+      /* no body */
+    }
+  }
+  ids = ids.filter((x) => typeof x === "string" && x.length).slice(0, 200);
+  if (!ids.length) return new NextResponse("No ids provided", { status: 400 });
+
+  const { data, error } = await supabase
+    .from("patterns")
+    .delete()
+    .in("id", ids)
+    .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
+    .select("id");
+  if (error) return new NextResponse(error.message, { status: 500 });
+
+  return NextResponse.json({ deleted: (data || []).map((r) => r.id) });
+}
