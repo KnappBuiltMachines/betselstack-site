@@ -29,6 +29,7 @@ export async function GET(request) {
       .from("patterns")
       .select("id, name, data, created_at, updated_at")
       .eq("id", id)
+      .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
       .single();
     if (error) return new NextResponse(error.message, { status: 404 });
     return NextResponse.json(data);
@@ -40,6 +41,7 @@ export async function GET(request) {
   const { data, error } = await supabase
     .from("patterns")
     .select(columns)
+    .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
     .order("created_at", { ascending: false });
   if (error) return new NextResponse(error.message, { status: 500 });
 
