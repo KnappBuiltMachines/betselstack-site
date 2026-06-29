@@ -543,8 +543,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       Layer A: ON
     </button>
     <div style="display:flex;border:1px solid var(--bd);border-radius:3px;overflow:hidden;">
-      <button id="leSideA" onclick="leSelectSide('A')" title="Side view — long side (pallet width)" style="background:#333333;color:#aaaaaa;border:none;padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:1px;">SIDE A</button>
-      <button id="leSideB" onclick="leSelectSide('B')" title="Side view — short side (pallet length)" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:1px;">SIDE B</button>
+      <button id="leSideA" onclick="leSelectSide('A')" title="Side elevation — pallet face A" style="background:#333333;color:#aaaaaa;border:none;padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:1px;">SIDE A</button>
+      <button id="leSideB" onclick="leSelectSide('B')" title="Side elevation — pallet face B" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:1px;">SIDE B</button>
     </div>
   <!-- Case palette -->
   <div id="leCasePalette" style="display:none;width:100%;padding:4px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:4px;">
@@ -976,8 +976,9 @@ function buildPatterns(cW, cL, pW, pL){
       if(pls.length){
         const mnx=Math.min(...pls.map(q=>q.x)), mxx=Math.max(...pls.map(q=>q.x+q.w));
         const mny=Math.min(...pls.map(q=>q.y)), mxy=Math.max(...pls.map(q=>q.y+q.l));
-        p.ohW=r2v(((mxx-mnx)-pW)/2);             // + = overhang, - = inset
-        p.ohL=r2v(((mxy-mny)-pL)/2);
+        const _oxW=r2v(((mxx-mnx)-pW)/2), _oxL=r2v(((mxy-mny)-pL)/2);   // + = overhang, - = inset
+        p.ohW=(pW<=pL)?_oxW:_oxL;                // W = shorter pallet side
+        p.ohL=(pW<=pL)?_oxL:_oxW;                // L = longer pallet side
         const caseArea=pls.reduce((s,q)=>s+q.w*q.l,0);
         p.cubicEff=r2v(caseArea/realArea*100);
         p.palUtilPct=p.cubicEff;
@@ -1360,7 +1361,7 @@ function _bpCore(cW, cL, pW, pL){
     const ce=r2(pls.reduce((s,p)=>s+p.w*p.l,0)/palArea*100);
     const mnX=Math.min(...pls.map(p=>p.x)),mxX=Math.max(...pls.map(p=>p.x+p.w));
     const mnY=Math.min(...pls.map(p=>p.y)),mxY=Math.max(...pls.map(p=>p.y+p.l));
-    const ohW=r2(((mxX-mnX)-pW)/2),ohL=r2(((mxY-mnY)-pL)/2);
+    const _oxW=r2(((mxX-mnX)-pW)/2),_oxL=r2(((mxY-mnY)-pL)/2);const ohW=(pW<=pL)?_oxW:_oxL,ohL=(pW<=pL)?_oxL:_oxW;
     const supp=caseSupportPct(pls,pW,pL,0,1,plsB);
     const cen=weightDistScore(pls,pW,pL);
     const stab=newStability(true,supp.avg,cen,ohW,ohL);
@@ -2869,8 +2870,8 @@ function _draw2DImmediate(){
     ctx.fillStyle='#223355';ctx.textAlign='center';ctx.textBaseline='alphabetic';
     ctx.fillText(lbl,lx,ly);
   };
-  arw(ox,oy-26,ox+pW*sc,oy-26,`W: ${ST.isMetric?r2(pW*25.4)+' mm':r2(pW)+'"'}`,true);
-  ctx.save();ctx.translate(ox-30,oy+pL*sc/2);ctx.rotate(-Math.PI/2);arw(-pL*sc/2,0,pL*sc/2,0,`L: ${ST.isMetric?r2(pL*25.4)+' mm':r2(pL)+'"'}`,true);ctx.restore();
+  arw(ox,oy-26,ox+pW*sc,oy-26,`${pW>=pL?'L':'W'}: ${ST.isMetric?r2(pW*25.4)+' mm':r2(pW)+'"'}`,true);
+  ctx.save();ctx.translate(ox-30,oy+pL*sc/2);ctx.rotate(-Math.PI/2);arw(-pL*sc/2,0,pL*sc/2,0,`${pW>=pL?'W':'L'}: ${ST.isMetric?r2(pL*25.4)+' mm':r2(pL)+'"'}`,true);ctx.restore();
 
   if(!ST.multiMode&&ST.patterns.length>0){
     const pat=ST.patterns[ST.selPat];
@@ -3507,8 +3508,8 @@ function drawSideView(side){
   };
 
   const sideWlbl=side==='A'
-    ?(ST.isMetric?`W: ${r2(pW*25.4)} mm`:`W: ${pW}"`)
-    :(ST.isMetric?`L: ${r2(pL*25.4)} mm`:`L: ${pL}"`);
+    ?(ST.isMetric?`${pW>=pL?'L':'W'}: ${r2(pW*25.4)} mm`:`${pW>=pL?'L':'W'}: ${pW}"`)
+    :(ST.isMetric?`${pW>=pL?'W':'L'}: ${r2(pL*25.4)} mm`:`${pW>=pL?'W':'L'}: ${pL}"`);
   const totalHlbl=ST.isMetric?`H: ${r2(totalH*25.4)} mm`:`H: ${r2(totalH)}"`;
   const palHlbl=ST.isMetric?`Pallet: ${r2(pH*25.4)} mm`:`Pallet: ${pH}"`;
   const caseStackLbl=ST.isMetric?`Cases: ${r2(cH*HI*25.4)} mm`:`Cases: ${r2(cH*HI)}"`;
@@ -4188,8 +4189,9 @@ function leUpdateStats(){
   const totalH      = r2(pal.h + caseStackH + getSlipSheetH());
 
   // Overhang: use the raw axis values (not swapped) for correct pallet-axis overhang
-  const ovW = r2((unitLoadW - pal.w) / 2);
-  const ovL = r2((unitLoadL - pal.l) / 2);
+  const _oxW = r2((unitLoadW - pal.w) / 2), _oxL = r2((unitLoadL - pal.l) / 2);
+  const ovW = (pal.w <= pal.l) ? _oxW : _oxL;   // W = shorter pallet side
+  const ovL = (pal.w <= pal.l) ? _oxL : _oxW;   // L = longer pallet side
 
   // Footprint efficiency
   const palArea       = pal.w * pal.l;
@@ -4297,8 +4299,9 @@ function leSavePattern(){
   const mxY = edA.length ? Math.max(...edA.map(p=>p.y+p.l)) : 0;
   const mnX = edA.length ? Math.min(...edA.map(p=>p.x)) : 0;
   const mnY = edA.length ? Math.min(...edA.map(p=>p.y)) : 0;
-  const ohW = r2(((mxX-mnX) - pal.w) / 2);
-  const ohL = r2(((mxY-mnY) - pal.l) / 2);
+  const _oxW = r2(((mxX-mnX) - pal.w) / 2), _oxL = r2(((mxY-mnY) - pal.l) / 2);
+  const ohW = (pal.w <= pal.l) ? _oxW : _oxL;
+  const ohL = (pal.w <= pal.l) ? _oxL : _oxW;
   const wdA = weightDistScore(edA, pal.w, pal.l);
   const wdB = weightDistScore(edB, pal.w, pal.l);
   const interlockPct = r2(overlapRatio(edA, edB)*100);
@@ -6504,7 +6507,7 @@ function renderTable(){
       const TI_B2 = plsB2 ? plsB2.length : TI2;
       const mxX=Math.max(...plsA.map(q=>q.x+q.w)),mnX=Math.min(...plsA.map(q=>q.x));
       const mxY=Math.max(...plsA.map(q=>q.y+q.l)),mnY=Math.min(...plsA.map(q=>q.y));
-      const ovW2=r2(((mxX-mnX)-pal.w)/2), ovL2=r2(((mxY-mnY)-pal.l)/2);
+      const _oxW2=r2(((mxX-mnX)-pal.w)/2), _oxL2=r2(((mxY-mnY)-pal.l)/2);const ovW2=(pal.w<=pal.l)?_oxW2:_oxL2, ovL2=(pal.w<=pal.l)?_oxL2:_oxW2;
       const eo=(ST.maxOverhang===''||ST.maxOverhang===null)?0:Math.abs(parseFloat(ST.maxOverhang)||0);
       const eoin=ST.isMetric?eo/25.4:eo;
 const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
@@ -6676,7 +6679,7 @@ function _syncStatsFromPattern(i){
   // L = longest, W = shortest
   const ulLong2 = Math.max(unitLoadW, unitLoadL);
   const ulShort2 = Math.min(unitLoadW, unitLoadL);
-  const ovW = r2((unitLoadW-pal.w)/2), ovL = r2((unitLoadL-pal.l)/2);
+  const _oxW6=r2((unitLoadW-pal.w)/2), _oxL6=r2((unitLoadL-pal.l)/2);const ovW = (pal.w<=pal.l)?_oxW6:_oxL6, ovL = (pal.w<=pal.l)?_oxL6:_oxW6;
   const eo  = (ST.maxOverhang===''||ST.maxOverhang===null)?0:Math.abs(parseFloat(ST.maxOverhang)||0);
   const eoin = ST.isMetric ? eo/25.4 : eo;
   const _supp = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB);
