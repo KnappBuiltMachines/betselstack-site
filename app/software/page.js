@@ -221,7 +221,7 @@ export default function SoftwarePage() {
               <li>
                 <div className="n">04</div>
                 <h3>Send the report</h3>
-                <p>Export a branded PDF or Excel sheet in one click.</p>
+                <p>Export a custom, branded report in one click.</p>
               </li>
             </ol>
           </div>
@@ -240,8 +240,7 @@ export default function SoftwarePage() {
               <div className="card"><h4>Standard &amp; custom pallets</h4><p>GMA, block, stringer, and fully custom dimensions — quarter pallet to oversized.</p></div>
               <div className="card"><h4>Real-time 3D</h4><p>Inspect the load and pattern from any angle before production.</p></div>
               <div className="card"><h4>Board-level layout</h4><p>Deck boards, stringers, spacing, and overhang under your control.</p></div>
-              <div className="card"><h4>PDF reports</h4><p>Branded, print-ready cut sheets and engineering summaries.</p></div>
-              <div className="card"><h4>Excel export</h4><p>Bill-of-materials and pattern data that drops into your systems.</p></div>
+              <div className="card"><h4>Custom reports</h4><p>Branded reports, custom-generated to meet your company&rsquo;s standards.</p></div>
             </div>
           </div>
         </section>
@@ -338,13 +337,13 @@ export default function SoftwarePage() {
               <article className="dive full">
                 <div className="dive-copy">
                   <span className="tag">Professional Output</span>
-                  <h3>Export print-ready engineering reports</h3>
+                  <h3>Export custom engineering reports</h3>
                   <p className="body">
                     Compose a custom report from 3D renders, 2D layer diagrams, and case,
                     pallet, and truck stats — then export a polished, branded Pallet
                     Pattern Engineering Report with dimensions, cubic efficiency, support,
-                    stability, weight breakdowns, and truck loading. Ready to print, email,
-                    or export to Excel.
+                    stability, weight breakdowns, and truck loading. Custom-generated to
+                    meet your company&rsquo;s standards and ready to print, email, or save.
                   </p>
                   <div className="why">
                     <b>Why it matters —</b> Look professional, keep specs on file, and give
