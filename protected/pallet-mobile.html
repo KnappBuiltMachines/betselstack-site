@@ -57,6 +57,26 @@
   #mbToast.show{ opacity:1; }
   #mbToast.ok{ background:#0e2a0e; color:#7fe07f; border:1px solid #2f7a2f; }
   #mbToast.err{ background:#3a0e0e; color:#ff8080; border:1px solid #aa3333; }
+
+  /* Cloud files sheet */
+  .mb-sheet{ position:fixed; inset:0; z-index:9000; background:var(--bg); display:flex; flex-direction:column; }
+  .mb-sheet[hidden]{ display:none; }
+  .mb-sheet .sh-top{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; border-bottom:2px solid var(--go); }
+  .mb-sheet .sh-top .ttl{ font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--go); }
+  .mb-sheet .sh-x{ background:transparent; border:1px solid var(--line); color:var(--txt);
+    height:34px; padding:0 14px; border-radius:8px; font-size:13px; }
+  .mb-list{ flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px; }
+  .mb-item{ display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .mb-item .meta{ flex:1 1 auto; min-width:0; }
+  .mb-item .meta .nm{ font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mb-item .meta .dt{ font-size:11px; color:var(--muted); margin-top:2px; letter-spacing:.04em; }
+  .mb-item .open{ flex:0 0 auto; height:38px; padding:0 16px; border:0; border-radius:8px;
+    background:var(--go); color:#1a1a1a; font-weight:600; font-size:14px; }
+  .mb-item .del{ flex:0 0 auto; height:38px; padding:0 12px; border:1px solid var(--line); border-radius:8px;
+    background:transparent; color:var(--muted); font-size:12px; }
+  .mb-empty{ text-align:center; color:var(--muted); font-size:14px; line-height:1.6; padding:40px 20px; }
 </style>
 </head>
 <body>
@@ -99,6 +119,7 @@
   <input id="mbName" type="text" placeholder="Auto-named if left blank" />
 
   <button class="btn" onclick="mbGenerate()">Generate patterns</button>
+  <button class="btn sec" style="margin-top:12px;" onclick="mbOpenCloud()">Open from cloud</button>
 </section>
 
 <!-- ===== Screen 2: viewer ===== -->
@@ -127,6 +148,15 @@
       <button class="btn" onclick="mbSaveCloud()">Save to cloud</button>
     </div>
   </div>
+</section>
+
+<!-- ===== Cloud files sheet ===== -->
+<section id="mbCloud" class="mb-sheet" hidden>
+  <div class="sh-top">
+    <span class="ttl">My saved files</span>
+    <button class="sh-x" onclick="mbCloseCloud()">Close</button>
+  </div>
+  <div id="mbCloudList" class="mb-list"></div>
 </section>
 
 <div id="mbToast"></div>
@@ -1878,6 +1908,120 @@ async function mbSaveCloud(){
     mbToast('Saved to cloud as "' + (row && row.name ? row.name : built.name) + '"', false);
   } catch(err){
     mbToast('Save failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+// ---- Cloud files: list / open / delete (all scoped to the signed-in user) ----
+function mbEsc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function mbFmtDate(iso){
+  try { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(); }
+  catch(e){ return ''; }
+}
+function mbOpenCloud(){
+  mbEl('mbCloud').hidden = false;
+  mbLoadCloudList();
+}
+function mbCloseCloud(){
+  mbEl('mbCloud').hidden = true;
+}
+
+async function mbLoadCloudList(){
+  var box = mbEl('mbCloudList');
+  box.innerHTML = '<div class="mb-empty">Loading your saved files\u2026</div>';
+  try {
+    var res = await fetch('/api/patterns', { credentials:'same-origin' });
+    if(res.status === 401){ box.innerHTML = '<div class="mb-empty">Please sign in again.</div>'; return; }
+    if(res.status === 403){ box.innerHTML = '<div class="mb-empty">Your access has expired.</div>'; return; }
+    if(!res.ok){ box.innerHTML = '<div class="mb-empty">Could not load files (HTTP ' + res.status + ').</div>'; return; }
+    var json = await res.json();
+    var rows = (json && json.patterns) || [];
+    if(!rows.length){
+      box.innerHTML = '<div class="mb-empty">No saved files yet.<br>Generate a pattern and tap \u201CSave to cloud.\u201D</div>';
+      return;
+    }
+    var html = '';
+    rows.forEach(function(r){
+      var when = mbFmtDate(r.updated_at || r.created_at);
+      var id = mbEsc(r.id);
+      html += '<div class="mb-item">' +
+        '<div class="meta"><div class="nm">' + mbEsc(r.name || 'Untitled pattern') + '</div>' +
+        (when ? '<div class="dt">' + when + '</div>' : '') + '</div>' +
+        '<button class="open" onclick="mbOpenPattern(\'' + id + '\')">Open</button>' +
+        '<button class="del" onclick="mbDeletePattern(\'' + id + '\')">Delete</button>' +
+        '</div>';
+    });
+    box.innerHTML = html;
+  } catch(err){
+    box.innerHTML = '<div class="mb-empty">Network error loading files.</div>';
+  }
+}
+
+async function mbOpenPattern(id){
+  mbToast('Opening\u2026', false);
+  try {
+    var res = await fetch('/api/patterns?id=' + encodeURIComponent(id), { credentials:'same-origin' });
+    if(!res.ok){ mbToast('Could not open (HTTP ' + res.status + ')', true); return; }
+    var row = await res.json();
+    var bundle = row && row.data;
+    if(!bundle || !bundle.state){ mbToast('That file is missing its saved settings', true); return; }
+    mbCloseCloud();
+    mbLoadBundle(bundle);
+    mbToast('Opened \u201C' + (row.name || 'pattern') + '\u201D', false);
+  } catch(err){
+    mbToast('Open failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+async function mbDeletePattern(id){
+  if(!window.confirm('Delete this file from the cloud? This cannot be undone.')) return;
+  try {
+    var res = await fetch('/api/patterns?id=' + encodeURIComponent(id), {
+      method:'DELETE', credentials:'same-origin'
+    });
+    if(!res.ok){ mbToast('Delete failed (HTTP ' + res.status + ')', true); return; }
+    mbToast('Deleted', false);
+    mbLoadCloudList();
+  } catch(err){
+    mbToast('Delete failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+// Rehydrate the input form from a saved .kbm bundle, then regenerate + jump to
+// the pattern that was selected when it was saved.
+function mbLoadBundle(bundle){
+  var st = (bundle && bundle.state) || {};
+  mbSetUnit(st.isMetric ? 'mm' : 'in');
+
+  var c = (st.cases && st.cases[0]) || {};
+  mbEl('mbCaseL').value = (c.w != null && c.w !== '') ? c.w : '';   // w = Length (see mbBuildBundle)
+  mbEl('mbCaseW').value = (c.l != null && c.l !== '') ? c.l : '';   // l = Width
+  mbEl('mbCaseH').value = (c.h != null && c.h !== '') ? c.h : '';   // h = Height
+  mbEl('mbMaxH').value  = (st.maxH != null && st.maxH !== '') ? st.maxH : 60;
+  mbEl('mbOH').value    = (st.maxOverhang != null) ? st.maxOverhang : '';
+
+  var pk = st.palletKey || 'full';
+  mbEl('mbPallet').value = pk;
+  mbPalletChange();
+  if(pk === 'custom' && st.customPallet){
+    // customPallet is stored in inches; show it in the active display unit.
+    var f = st.isMetric ? 25.4 : 1;
+    var rnd = function(v){ return Math.round(v * f * 100) / 100; };
+    mbEl('mbPalW').value = (st.customPallet.w != null) ? rnd(st.customPallet.w) : '';
+    mbEl('mbPalL').value = (st.customPallet.l != null) ? rnd(st.customPallet.l) : '';
+  }
+
+  mbEl('mbName').value = (bundle.project && bundle.project.name) ? bundle.project.name : '';
+
+  mbGenerate();
+
+  var want = parseInt(st.selPat, 10);
+  if(!isNaN(want) && want >= 0 && want < MB.patterns.length){
+    MB.idx = want;
+    mbRenderPattern();
   }
 }
 
