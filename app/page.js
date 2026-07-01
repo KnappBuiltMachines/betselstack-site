@@ -25,8 +25,7 @@ const CAPS = [
   ["Board-level layout", "Deck boards, stringers, spacing, and overhang all under your control."],
   ["50+ patterns instantly", "Enter case and pallet dimensions and get dozens of ranked layouts in seconds."],
   ["Layer planning", "Step through the load one layer at a time with exact placement and orientation."],
-  ["PDF reports", "Branded, print-ready engineering cut sheets and summaries in one click."],
-  ["Excel export", "Bill-of-materials and pattern data that drops straight into your systems."],
+  ["Custom reports", "Branded reports, custom-generated to meet your company\u2019s standards."],
 ];
 
 export default function HomePage() {
