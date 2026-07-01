@@ -8413,11 +8413,8 @@ function rbInit(){
     <button class="rbt" onclick="rbSaveCustom()" title="Save current layout as your Custom layout">💾 Save as Custom</button>
     <button class="rbt" onclick="rbClear()" style="margin-left:4px;">🗑 Clear</button>
     <div style="flex:1"></div>
-    <span class="tb-label">PAGE:</span>
-    <button class="rbt ${RB.pageH===1123?'active':''}" onclick="rbSetPage('portrait')" id="rbPA">Portrait</button>
-    <button class="rbt ${RB.pageH===794?'active':''}"  onclick="rbSetPage('landscape')" id="rbLA">Landscape</button>
-    <div style="width:1px;height:18px;background:var(--bd);margin:0 6px;"></div>
     <button class="rbt export" onclick="rbExportPDF()">⬇ Export PDF</button>
+    <button class="rbt export" onclick="rbSaveReportCloud()" title="Save this report to your account so you can review it in the mobile app">☁ Save to Cloud</button>
   </div>
   <div id="rptSplit">
     <div id="rptPalette">
@@ -9193,7 +9190,7 @@ function rbExportPDF(){
   }));
 }
 
-function _rbDoExportPDF(){
+function _rbBuildReportDoc(){
   const jsCtor=window.jspdf.jsPDF;
   const isLandscape=RB.pageW>RB.pageH;
   const doc=new jsCtor({orientation:isLandscape?'landscape':'portrait',unit:'mm',format:'a4'});
@@ -9329,7 +9326,53 @@ function _rbDoExportPDF(){
 
   const D2=buildReportData();
   const fn='KBM_Report_'+(D2.project||'report').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';
-  doc.save(fn);
+  return { doc, fn, projectName:(D2.project||'Report') };
+}
+
+function _rbDoExportPDF(){
+  const built=_rbBuildReportDoc();
+  built.doc.save(built.fn);
+}
+
+// Save the generated report PDF to the signed-in user's account (cloud),
+// so it can be pulled up and reviewed in the mobile app.
+async function rbSaveReportCloud(){
+  if(!window.jspdf||typeof window.jspdf.jsPDF!=='function'){
+    alert('PDF library not loaded. Please wait and try again.'); return;
+  }
+  if(!RB||!RB.blocks||!RB.blocks.length){
+    alert('No blocks on the canvas. Load a layout or add blocks first.'); return;
+  }
+  const sp=document.getElementById('exportSpinner');
+  if(sp){ sp.style.display='inline'; sp.textContent='☁ SAVING...'; }
+  try{
+    const built=_rbBuildReportDoc();
+    const dataUri=built.doc.output('datauristring'); // data:application/pdf;...;base64,....
+    // Guard against Vercel's ~4.5MB request body limit.
+    if(dataUri.length > 4200000){
+      _showNotification('⚠ Report is too large to save. Try fewer/simpler image blocks.', true);
+      return;
+    }
+    const title=(KBM_SETTINGS&&KBM_SETTINGS.reportTitle?KBM_SETTINGS.reportTitle:'').trim();
+    const reportName=(title?title+' — ':'')+(built.projectName||'Report');
+    const res=await fetch('/api/reports',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body: JSON.stringify({ name: reportName, pdf: dataUri })
+    });
+    if(res.status===401){ _showNotification('⚠ Please sign in again', true); return; }
+    if(res.status===403){ _showNotification('⚠ Your access has expired', true); return; }
+    if(res.status===413){ _showNotification('⚠ Report too large to save', true); return; }
+    if(!res.ok){ const t=await res.text().catch(()=>''); _showNotification('⚠ Save failed: '+(t||('HTTP '+res.status)), true); return; }
+    const row=await res.json();
+    _showNotification('☁ Report saved to cloud'+(row&&row.name?(' as "'+row.name+'"'):'')+' — review it in the mobile app.', false);
+  }catch(e){
+    console.error('[rbSaveReportCloud]',e);
+    _showNotification('⚠ Save failed: '+e.message, true);
+  }finally{
+    if(sp){ sp.style.display='none'; sp.textContent='⏳ GENERATING...'; }
+  }
 }
 
 
