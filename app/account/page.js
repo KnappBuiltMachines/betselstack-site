@@ -26,9 +26,14 @@ export default async function AccountPage() {
         <p className="sub">{user.email}</p>
 
         {access.allowed && (
-          <Link href="/builder" className="btn btn--primary btn--block" style={{ marginBottom: 18 }}>
-            Open the Pallet Builder
-          </Link>
+          <>
+            <Link href="/builder" className="btn btn--primary btn--block" style={{ marginBottom: 10 }}>
+              Open the Pallet Builder
+            </Link>
+            <Link href="/m" className="btn btn--ghost btn--block" style={{ marginBottom: 18 }}>
+              Mobile version &mdash; review saved files
+            </Link>
+          </>
         )}
 
         {sub ? (
