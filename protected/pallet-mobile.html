@@ -77,6 +77,11 @@
   .mb-item .del{ flex:0 0 auto; height:38px; padding:0 12px; border:1px solid var(--line); border-radius:8px;
     background:transparent; color:var(--muted); font-size:12px; }
   .mb-empty{ text-align:center; color:var(--muted); font-size:14px; line-height:1.6; padding:40px 20px; }
+  .mb-sheet .sh-tabs{ flex:0 0 auto; display:flex; gap:8px; padding:10px 16px 2px; }
+  .mb-sheet .sh-tab{ flex:1; height:38px; background:var(--panel); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; font-size:13px; letter-spacing:.04em; }
+  .mb-sheet .sh-tab.on{ background:var(--go); color:#1a1a1a; border-color:var(--go); font-weight:600; }
+  #mbPdfFrame{ flex:1 1 auto; width:100%; border:0; background:#525659; }
 </style>
 </head>
 <body>
@@ -156,7 +161,20 @@
     <span class="ttl">My saved files</span>
     <button class="sh-x" onclick="mbCloseCloud()">Close</button>
   </div>
+  <div class="sh-tabs">
+    <button id="mbTabPat" class="sh-tab on" onclick="mbCloudTab('patterns')">Patterns</button>
+    <button id="mbTabRpt" class="sh-tab" onclick="mbCloudTab('reports')">Reports</button>
+  </div>
   <div id="mbCloudList" class="mb-list"></div>
+</section>
+
+<!-- ===== Report PDF viewer ===== -->
+<section id="mbPdf" class="mb-sheet" hidden>
+  <div class="sh-top">
+    <span class="ttl" id="mbPdfTtl">Report</span>
+    <button class="sh-x" onclick="mbClosePdf()">Close</button>
+  </div>
+  <iframe id="mbPdfFrame" title="Saved report"></iframe>
 </section>
 
 <div id="mbToast"></div>
@@ -1921,12 +1939,22 @@ function mbFmtDate(iso){
   try { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(); }
   catch(e){ return ''; }
 }
+var mbCloudTabCur = 'patterns';
+var mbPdfBlobUrl = null;
+
 function mbOpenCloud(){
   mbEl('mbCloud').hidden = false;
-  mbLoadCloudList();
+  mbCloudTab(mbCloudTabCur || 'patterns');
 }
 function mbCloseCloud(){
   mbEl('mbCloud').hidden = true;
+}
+function mbCloudTab(which){
+  mbCloudTabCur = (which === 'reports') ? 'reports' : 'patterns';
+  mbEl('mbTabPat').classList.toggle('on', mbCloudTabCur === 'patterns');
+  mbEl('mbTabRpt').classList.toggle('on', mbCloudTabCur === 'reports');
+  if(mbCloudTabCur === 'reports') mbLoadReportList();
+  else mbLoadCloudList();
 }
 
 async function mbLoadCloudList(){
@@ -1985,6 +2013,97 @@ async function mbDeletePattern(id){
     if(!res.ok){ mbToast('Delete failed (HTTP ' + res.status + ')', true); return; }
     mbToast('Deleted', false);
     mbLoadCloudList();
+  } catch(err){
+    mbToast('Delete failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+// ---- Reports: list / view (PDF) / delete (scoped to the signed-in user) ----
+async function mbLoadReportList(){
+  var box = mbEl('mbCloudList');
+  box.innerHTML = '<div class="mb-empty">Loading your saved reports\u2026</div>';
+  try {
+    var res = await fetch('/api/reports', { credentials:'same-origin' });
+    if(res.status === 401){ box.innerHTML = '<div class="mb-empty">Please sign in again.</div>'; return; }
+    if(res.status === 403){ box.innerHTML = '<div class="mb-empty">Your access has expired.</div>'; return; }
+    if(!res.ok){ box.innerHTML = '<div class="mb-empty">Could not load reports (HTTP ' + res.status + ').</div>'; return; }
+    var json = await res.json();
+    var rows = (json && json.reports) || [];
+    if(!rows.length){
+      box.innerHTML = '<div class="mb-empty">No saved reports yet.<br>In the web app, open a report and tap \u201CSave to Cloud.\u201D</div>';
+      return;
+    }
+    var html = '';
+    rows.forEach(function(r){
+      var when = mbFmtDate(r.updated_at || r.created_at);
+      var id = mbEsc(r.id);
+      html += '<div class="mb-item">' +
+        '<div class="meta"><div class="nm">' + mbEsc(r.name || 'Untitled report') + '</div>' +
+        (when ? '<div class="dt">' + when + '</div>' : '') + '</div>' +
+        '<button class="open" onclick="mbViewReport(\'' + id + '\')">View</button>' +
+        '<button class="del" onclick="mbDeleteReport(\'' + id + '\')">Delete</button>' +
+        '</div>';
+    });
+    box.innerHTML = html;
+  } catch(err){
+    box.innerHTML = '<div class="mb-empty">Network error loading reports.</div>';
+  }
+}
+
+// Convert a data: URI (base64 or url-encoded) into a Blob URL. Blob URLs render
+// in an <iframe> reliably across mobile browsers, unlike long data: URIs.
+function mbDataUriToBlobUrl(dataUri){
+  var comma = dataUri.indexOf(',');
+  if(comma < 0) return null;
+  var meta = dataUri.slice(5, comma);           // strip leading "data:"
+  var mime = (meta.split(';')[0]) || 'application/pdf';
+  var isB64 = /;base64/i.test(meta);
+  var payload = dataUri.slice(comma + 1);
+  var bytes;
+  if(isB64){
+    var bin = atob(payload);
+    bytes = new Uint8Array(bin.length);
+    for(var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(payload));
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+async function mbViewReport(id){
+  mbToast('Opening report\u2026', false);
+  try {
+    var res = await fetch('/api/reports?id=' + encodeURIComponent(id), { credentials:'same-origin' });
+    if(!res.ok){ mbToast('Could not open (HTTP ' + res.status + ')', true); return; }
+    var row = await res.json();
+    if(!row || !row.pdf){ mbToast('That report has no saved PDF', true); return; }
+    var url = mbDataUriToBlobUrl(row.pdf);
+    if(!url){ mbToast('Could not read that report', true); return; }
+    if(mbPdfBlobUrl){ URL.revokeObjectURL(mbPdfBlobUrl); }
+    mbPdfBlobUrl = url;
+    mbEl('mbPdfTtl').textContent = row.name || 'Report';
+    mbEl('mbPdfFrame').src = url;
+    mbEl('mbPdf').hidden = false;
+  } catch(err){
+    mbToast('Open failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+function mbClosePdf(){
+  mbEl('mbPdf').hidden = true;
+  mbEl('mbPdfFrame').src = 'about:blank';
+  if(mbPdfBlobUrl){ URL.revokeObjectURL(mbPdfBlobUrl); mbPdfBlobUrl = null; }
+}
+
+async function mbDeleteReport(id){
+  if(!window.confirm('Delete this report from the cloud? This cannot be undone.')) return;
+  try {
+    var res = await fetch('/api/reports?id=' + encodeURIComponent(id), {
+      method:'DELETE', credentials:'same-origin'
+    });
+    if(!res.ok){ mbToast('Delete failed (HTTP ' + res.status + ')', true); return; }
+    mbToast('Deleted', false);
+    mbLoadReportList();
   } catch(err){
     mbToast('Delete failed: ' + (err && err.message ? err.message : 'network error'), true);
   }
