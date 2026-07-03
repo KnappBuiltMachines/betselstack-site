@@ -6,13 +6,13 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <main className="bst-wrap">
+    <div className="bst-wrap">
       <style>{`
         .bst-wrap {
           max-width: 760px;
           margin: 0 auto;
           padding: 56px 24px 96px;
-          color: #1f2937;
+          color: #d6dbe3;
           line-height: 1.7;
           font-size: 16px;
         }
@@ -20,17 +20,17 @@ export default function TermsPage() {
           font-size: 2.1rem;
           line-height: 1.2;
           margin: 0 0 8px;
-          color: #111827;
+          color: #f5f7fa;
         }
         .bst-updated {
-          color: #6b7280;
+          color: #9aa3af;
           font-size: 0.95rem;
           margin: 0 0 36px;
         }
         .bst-wrap h2 {
           font-size: 1.25rem;
           margin: 40px 0 12px;
-          color: #111827;
+          color: #f5f7fa;
         }
         .bst-wrap p {
           margin: 0 0 14px;
@@ -43,7 +43,7 @@ export default function TermsPage() {
           margin-bottom: 8px;
         }
         .bst-wrap a {
-          color: #1d4ed8;
+          color: #7fb2ff;
           text-decoration: underline;
         }
         @media (max-width: 480px) {
@@ -216,8 +216,8 @@ export default function TermsPage() {
       <h2>13. Contact</h2>
       <p>
         Questions about these Terms can be sent to{" "}
-        <a href="mailto:support@betselstack.com">support@betselstack.com</a>.
+        <a href="mailto:team@betselstack.com">team@betselstack.com</a>.
       </p>
-    </main>
+    </div>
   );
 }
