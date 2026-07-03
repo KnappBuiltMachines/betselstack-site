@@ -791,16 +791,58 @@ function calcTotalCases(TI, HI, TI_B){
   return pairs * (TI + b) + remainder * TI;
 }
 // ── Analysis helpers
+// ── Spatial hash for fast axis-aligned rectangle overlap queries ──
+// Large layers (hundreds+ of small cases) make the naive O(n²) overlap
+// loops freeze the browser; these helpers give exact results in ~O(n).
+function _buildRectHash(pls){
+  const avg=pls.reduce((s,p)=>s+p.w*p.l,0)/pls.length;
+  const cell=Math.max(1e-6, Math.sqrt(avg));
+  const map=new Map();
+  const key=(cx,cy)=>cx*100003+cy;
+  pls.forEach((p,i)=>{
+    const x0=Math.floor(p.x/cell), x1=Math.floor((p.x+p.w-1e-9)/cell);
+    const y0=Math.floor(p.y/cell), y1=Math.floor((p.y+p.l-1e-9)/cell);
+    for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){
+      const k=key(cx,cy);
+      let a=map.get(k); if(!a){a=[];map.set(k,a);}
+      a.push(i);
+    }
+  });
+  return {cell,map,key,pls};
+}
+function _hashOverlapArea(h,c){
+  const seen=new Set(); let area=0;
+  const x0=Math.floor(c.x/h.cell), x1=Math.floor((c.x+c.w-1e-9)/h.cell);
+  const y0=Math.floor(c.y/h.cell), y1=Math.floor((c.y+c.l-1e-9)/h.cell);
+  for(let cx=x0;cx<=x1;cx++)for(let cy=y0;cy<=y1;cy++){
+    const a=h.map.get(h.key(cx,cy)); if(!a) continue;
+    for(const i of a){
+      if(seen.has(i)) continue; seen.add(i);
+      const b=h.pls[i];
+      const ox=Math.max(0,Math.min(c.x+c.w,b.x+b.w)-Math.max(c.x,b.x));
+      const oy=Math.max(0,Math.min(c.y+c.l,b.y+b.l)-Math.max(c.y,b.y));
+      area+=ox*oy;
+    }
+  }
+  return area;
+}
+
 function overlapRatio(plsA, plsB){
   if(!plsA.length || !plsB.length) return 0;
   let overlap = 0;
-  plsA.forEach(a => {
-    plsB.forEach(b => {
-      const ox = Math.max(0, Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x));
-      const oy = Math.max(0, Math.min(a.y+a.l, b.y+b.l) - Math.max(a.y, b.y));
-      overlap += ox * oy;
+  if(plsA.length*plsB.length>40000){
+    // Hash-accelerated exact computation for large layers
+    const h=_buildRectHash(plsB);
+    plsA.forEach(a=>{ overlap+=_hashOverlapArea(h,a); });
+  } else {
+    plsA.forEach(a => {
+      plsB.forEach(b => {
+        const ox = Math.max(0, Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x));
+        const oy = Math.max(0, Math.min(a.y+a.l, b.y+b.l) - Math.max(a.y, b.y));
+        overlap += ox * oy;
+      });
     });
-  });
+  }
   const total = plsA.reduce((s,p) => s + p.w * p.l, 0);
   return total > 0 ? r2(Math.min(1, overlap / total)) : 0;
 }
@@ -907,8 +949,21 @@ function caseSupportPct(pls, palW, palL, edgeOff, HI, plsB){
 
   let totalArea = 0, totalSupported = 0, minSupport = 100;
 
+  // Hash cache — at most two distinct layer arrays (A and B); build each
+  // spatial hash once and reuse across all upper layers (exact results,
+  // avoids O(n²) freeze for very small cases / very high counts)
+  const _hashCache = new Map();
+  const _getHash = (arr) => {
+    let h = _hashCache.get(arr);
+    if(!h){ h = _buildRectHash(arr); _hashCache.set(arr, h); }
+    return h;
+  };
+
   for(let lay=0; lay<hi; lay++){
     const layer = layerPls[lay];
+    const below = lay>0 ? layerPls[lay-1] : null;
+    const useHash = below && layer.length*below.length > 40000;
+    const belowHash = useHash ? _getHash(below) : null;
     layer.forEach(c => {
       const bottom = c.w * c.l;
       totalArea += bottom;
@@ -918,9 +973,12 @@ function caseSupportPct(pls, palW, palL, edgeOff, HI, plsB){
         // (minSupport stays 100 for layer 1 cases)
       } else {
         // Higher layers: sum overlap with every case in the layer below
-        const below = layerPls[lay-1];
         let suppArea = 0;
-        below.forEach(b => { suppArea += overlapArea(c, b); });
+        if(useHash){
+          suppArea = _hashOverlapArea(belowHash, c);
+        } else {
+          below.forEach(b => { suppArea += overlapArea(c, b); });
+        }
         // Cap at bottom area (no double-counting)
         suppArea = Math.min(suppArea, bottom);
         totalSupported += suppArea;
@@ -1044,9 +1102,22 @@ function _bpCore(cW, cL, pW, pL){
   const validate=pls=>{
     const ohl=ohIn+EPS;
     for(const p of pls) if(p.x<-ohl||p.y<-ohl||p.x+p.w>pW+ohl||p.y+p.l>pL+ohl) return false;
-    for(let i=0;i<pls.length;i++){const a=pls[i];
-      for(let j=i+1;j<pls.length;j++){const b=pls[j];
-        if(a.x+a.w-EPS>b.x&&b.x+b.w-EPS>a.x&&a.y+a.l-EPS>b.y&&b.y+b.l-EPS>a.y) return false;
+    if(pls.length<=200){
+      for(let i=0;i<pls.length;i++){const a=pls[i];
+        for(let j=i+1;j<pls.length;j++){const b=pls[j];
+          if(a.x+a.w-EPS>b.x&&b.x+b.w-EPS>a.x&&a.y+a.l-EPS>b.y&&b.y+b.l-EPS>a.y) return false;
+        }
+      }
+      return true;
+    }
+    // Large layers: spatial-hash collision check (exact, ~O(n))
+    const h=_buildRectHash(pls);
+    for(const arr of h.map.values()){
+      for(let i=0;i<arr.length;i++){const a=pls[arr[i]];
+        for(let j=i+1;j<arr.length;j++){const b=pls[arr[j]];
+          if(arr[i]===arr[j]) continue;
+          if(a.x+a.w-EPS>b.x&&b.x+b.w-EPS>a.x&&a.y+a.l-EPS>b.y&&b.y+b.l-EPS>a.y) return false;
+        }
       }
     }
     return true;
@@ -1238,7 +1309,11 @@ function _bpCore(cW, cL, pW, pL){
     const n=pls.length;
     const area=pls.reduce((s,p)=>s+p.w*p.l,0);
     let conn=0;
-    pls.forEach(a=>{if(pls.some(b=>b!==a&&((Math.abs(a.x+a.w-b.x)<0.2||Math.abs(b.x+b.w-a.x)<0.2)&&(a.y<b.y+b.l-EPS&&b.y<a.y+a.l-EPS))||((Math.abs(a.y+a.l-b.y)<0.2||Math.abs(b.y+b.l-a.y)<0.2)&&(a.x<b.x+b.w-EPS&&b.x<a.x+a.w-EPS))))conn++;});
+    if(n<=300){
+      pls.forEach(a=>{if(pls.some(b=>b!==a&&((Math.abs(a.x+a.w-b.x)<0.2||Math.abs(b.x+b.w-a.x)<0.2)&&(a.y<b.y+b.l-EPS&&b.y<a.y+a.l-EPS))||((Math.abs(a.y+a.l-b.y)<0.2||Math.abs(b.y+b.l-a.y)<0.2)&&(a.x<b.x+b.w-EPS&&b.x<a.x+a.w-EPS))))conn++;});
+    } else {
+      conn=n; // very high counts: dense grids — treat as fully connected
+    }
     const mnX=Math.min(...pls.map(p=>p.x)),mxX=Math.max(...pls.map(p=>p.x+p.w));
     const mnY=Math.min(...pls.map(p=>p.y)),mxY=Math.max(...pls.map(p=>p.y+p.l));
     const bbox=(mxX-mnX)*(mxY-mnY);
@@ -1324,7 +1399,7 @@ function _bpCore(cW, cL, pW, pL){
     // Only mixed-orientation patterns get distributed, so their fill cases can
     // flush the perimeter and even out the leftover space.
     const uniform=pls.every(p=>p.w===pls[0].w&&p.l===pls[0].l);
-    if(!skipBillboard && !uniform){
+    if(!skipBillboard && !uniform && pls.length<=250){
       // Best-effort billboard: pls is already valid here. If spreading
       // creates overlaps (common for multi-row-type patterns where rows
       // have different case widths), fall back to the pre-billboard
@@ -1345,14 +1420,18 @@ function _bpCore(cW, cL, pW, pL){
     // already accepted once the pallet is turned 180° or mirrored left-right
     // or top-bottom (allowing for gap-distribution jitter up to MAXGAP).
     // flipX∘flipY == rot180, so these three cover the pallet's full symmetry.
-    const myMs=_msKey(pls);
-    const myVariants=[_norm(rot180(pls)), _norm(flipX(pls)), _norm(flipY(pls))];
-    for(const ent of seenGeo){
-      if(ent.ms!==myMs) continue;
-      if(myVariants.some(v=>_closeMatch(ent.norm,v))) return;
+    // Skipped for very large layers (O(n²) per comparison) — the exact
+    // fingerprint dedup above still catches identical and rot-180 twins.
+    if(pls.length<=250){
+      const myMs=_msKey(pls);
+      const myVariants=[_norm(rot180(pls)), _norm(flipX(pls)), _norm(flipY(pls))];
+      for(const ent of seenGeo){
+        if(ent.ms!==myMs) continue;
+        if(myVariants.some(v=>_closeMatch(ent.norm,v))) return;
+      }
+      seenGeo.push({ms:myMs, norm:_norm(pls)});
     }
     seenFP.set(k,true);
-    seenGeo.push({ms:myMs, norm:_norm(pls)});
     // Interlock: rot180, realigned to same bbox
     const rawB=rot180(pls);
     const mnXA=Math.min(...pls.map(p=>p.x)),mnYA=Math.min(...pls.map(p=>p.y));
@@ -1443,7 +1522,10 @@ function _bpCore(cW, cL, pW, pL){
   // Track which row-type-sequence signatures we've already registered
   const seenRowSig=new Set();
   const MAX_PATS=400;     // cap on registered patterns
-  const NODE_CAP=30000;   // cap on DFS nodes visited (independent of registration)
+  // Very high case counts make each DFS node expensive (hundreds of
+  // placements per row); reduce the node budget so total work stays flat.
+  const _estCnt=Math.floor((maxW*maxL)/(W0*D0)+1e-9);
+  const NODE_CAP=_estCnt>800?2500:_estCnt>250?8000:30000;
   let nodeVisits=0;
 
   // DFS over row sequences
@@ -2020,6 +2102,143 @@ function _bpCore(cW, cL, pW, pL){
   } // end orientation-bucket engine
 
   // ════════════════════════════════════════════════════════════════
+  // 5-BLOCK / G4 GENERATOR  (raster-point sweep)
+  // ────────────────────────────────────────────────────────────────
+  // The pallet is partitioned into up to five rectangular blocks —
+  // four corner blocks arranged pinwheel-fashion plus an optional
+  // centre block — and each block is filled with its best uniform
+  // single-orientation grid. This is the classical block-structure
+  // approach to the Manufacturer's Pallet Loading Problem: for many
+  // case/pallet combinations the best block pattern fits MORE cases
+  // per layer than any row-sequence pattern can.
+  //
+  // Cases remain upright at all times — only 0°/90° plan rotation,
+  // exactly like every other generator in this engine.
+  //
+  // Block boundaries are swept only over RASTER POINTS: x-coordinates
+  // of the form a·W0 + b·W9 (and y-coordinates a·D0 + b·D9). Any
+  // optimal block partition can be normalised to these points, so
+  // nothing is lost and the sweep stays small and fast.
+  // ════════════════════════════════════════════════════════════════
+  if(can0&&can9){
+    const rasterPts=(u,v,span)=>{
+      const s=new Set([0,rp(span)]);
+      for(let a=0;a*u<=span+EPS;a++)
+        for(let b=0;a*u+b*v<=span+EPS;b++)
+          s.add(rp(a*u+b*v));
+      return [...s].sort((x,y)=>x-y);
+    };
+    const RX=rasterPts(W0,W9,maxW), RY=rasterPts(D0,D9,maxL);
+
+    // Best uniform grid that fills a w×h block (memoised — the sweep
+    // revisits the same block sizes thousands of times)
+    const _gridMemo=new Map();
+    const bestGrid=(w,h)=>{
+      const key=Math.round(w*100)*100000+Math.round(h*100);
+      const hit=_gridMemo.get(key);
+      if(hit!==undefined) return hit;
+      const c0=Math.floor((w+EPS)/W0), r0=Math.floor((h+EPS)/D0);
+      const c9=Math.floor((w+EPS)/W9), r9=Math.floor((h+EPS)/D9);
+      const n0=c0*r0, n9=c9*r9;
+      const g=(n0<=0&&n9<=0)?null
+        :(n9>n0?{n:n9,ori:90,cols:c9,rows:r9,cw:W9,cl:D9}
+               :{n:n0,ori:0, cols:c0,rows:r0,cw:W0,cl:D0});
+      _gridMemo.set(key,g);
+      return g;
+    };
+
+    // Partition (x1<=x2, y1<=y2) → five block rects with outer-corner
+    // anchors so the load stays flush at the pallet perimeter:
+    //   B1 top-left · B2 top-right · B3 bottom-right · B4 bottom-left
+    //   B5 centre (anchored centred)
+    const blockRects=(x1,y1,x2,y2)=>[
+      {x:0, y:0, w:x1,      h:y2,      ax:0,  ay:0  },
+      {x:x1,y:0, w:maxW-x1, h:y1,      ax:1,  ay:0  },
+      {x:x2,y:y1,w:maxW-x2, h:maxL-y1, ax:1,  ay:1  },
+      {x:0, y:y2,w:x2,      h:maxL-y2, ax:0,  ay:1  },
+      {x:x1,y:y1,w:x2-x1,   h:y2-y1,   ax:0.5,ay:0.5},
+    ];
+
+    // Phase 1 — arithmetic sweep of raster partitions, count only.
+    // Candidates are bucketed by case count; only counts within 3 of
+    // the running best are retained (400 per bucket max), so memory
+    // and sort cost stay flat no matter how large the sweep is.
+    //
+    // For very small cases the raster sets get big enough that the
+    // full 4-coordinate sweep would be slow, so the sweep switches to
+    // the 180°-SYMMETRIC family (x2 = pW − x1, y2 = pL − y1 — the
+    // classical pinwheel-of-blocks structure that covers the vast
+    // majority of optimal block patterns) plus the shared-boundary
+    // 4-block splits. Normal case sizes get the full exhaustive sweep.
+    const byN=new Map();
+    let curBest=0;
+    const consider=(x1,y1,x2,y2)=>{
+      if(x2<x1-EPS||y2<y1-EPS) return;
+      let n=0, used=0;
+      for(const r of blockRects(x1,y1,x2,y2)){
+        if(r.w<EPS||r.h<EPS) continue;
+        const g=bestGrid(r.w,r.h);
+        if(g){n+=g.n;used++;}
+      }
+      if(n<1||used<2||n<curBest-3) return;
+      if(n>curBest){
+        curBest=n;
+        for(const k of byN.keys()) if(k<curBest-3) byN.delete(k);
+      }
+      let arr=byN.get(n);
+      if(!arr){arr=[];byN.set(n,arr);}
+      if(arr.length<400) arr.push({x1,y1,x2,y2,n});
+    };
+    const SYM_ONLY=RX.length*RY.length>1600;
+    if(SYM_ONLY){
+      for(const x1 of RX){
+        const x2=rp(maxW-x1);
+        for(const y1 of RY) consider(x1,y1,x2,rp(maxL-y1));
+      }
+      for(const x1 of RX) for(const y1 of RY) consider(x1,y1,x1,y1);
+    } else {
+      for(let xi=0;xi<RX.length;xi++){
+        const x1=RX[xi];
+        for(let xj=xi;xj<RX.length;xj++){
+          const x2=RX[xj];
+          for(let yi=0;yi<RY.length;yi++){
+            const y1=RY[yi];
+            for(let yj=yi;yj<RY.length;yj++) consider(x1,y1,x2,RY[yj]);
+          }
+        }
+      }
+    }
+    const cand=[...byN.entries()].sort((a,b)=>b[0]-a[0]).flatMap(e=>e[1]);
+
+    // Phase 2 — build placements for the strongest candidates only
+    const KEEP=Math.min(cand.length,80);
+    let _bAccepted=0;
+    for(let ci=0;ci<KEEP;ci++){
+      const {x1,y1,x2,y2,n}=cand[ci];
+      const pls=[];
+      let blocksUsed=0;
+      for(const r of blockRects(x1,y1,x2,y2)){
+        if(r.w<EPS||r.h<EPS) continue;
+        const g=bestGrid(r.w,r.h);
+        if(!g) continue;
+        blocksUsed++;
+        const gw=g.cols*g.cw, gh=g.rows*g.cl;
+        const ox=rp(r.x+(r.w-gw)*r.ax), oy=rp(r.y+(r.h-gh)*r.ay);
+        for(let rr=0;rr<g.rows;rr++)
+          for(let cc=0;cc<g.cols;cc++)
+            pls.push({x:rp(ox+cc*g.cw),y:rp(oy+rr*g.cl),w:g.cw,l:g.cl,ori:g.ori});
+      }
+      if(pls.length!==n||blocksUsed<2) continue;
+      const before=PATS.length;
+      addPat(`5-Block ${pls.length}`,
+        `Block pattern — pallet split into ${blocksUsed} rectangular blocks, each filled with its best upright single-orientation grid (raster-point block sweep).`,
+        pls, true);
+      if(PATS.length>before) _bAccepted++;
+      if(_bAccepted>=40) break; // plenty of distinct block layouts kept
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // GAP-FILL OPTIMIZER  v2
   // ────────────────────────────────────────────────────────────────
   // Approach: for every pattern, compute a pixel-resolution occupancy
@@ -2143,6 +2362,7 @@ function _bpCore(cW, cL, pW, pL){
     // Run gap-fill on every pattern
     const snapshot=[...PATS];
     for(const pat of snapshot){
+      if(pat.placements.length>250) continue; // cell grid is O(n²) — skip very large layers
       if(!hasEnoughFreeSpace(pat.placements)) continue;
 
       // Try filling all free space
@@ -2221,12 +2441,14 @@ function _bpCore(cW, cL, pW, pL){
 
   result.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
 
-  // Top of the list is always the two pure column stacks (the cleanest, most
-  // stackable layouts), with the higher case-count of the two leading. Every
-  // other pattern keeps its existing rank order below them.
-  const colStacks=forced.slice().sort((a,b)=>b.TI-a.TI);
-  const others=result.filter(p=>!forced.includes(p));
-  return [...colStacks, ...others];
+  // ── RANKING: strictly by case count ──────────────────────────────
+  // Highest cases-per-layer first, score as tiebreak. The two pure
+  // column stacks are still guaranteed to be IN the list (forced above)
+  // but rank by their own case count like every other pattern.
+  const _final=result;
+  const _ubound=Math.floor((maxW*maxL)/(W0*D0)+1e-9);
+  _final.forEach(p=>{ p.maxPossible=_ubound; p.isOptimal=(p.TI>=_ubound); });
+  return _final;
 }
 
 
@@ -6595,7 +6817,7 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
                style="background:transparent;border:none;color:#c0392b;font-size:9px;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
            </div>
          </td>`
-      : `<td style="color:${hasEdits&&!isSelected?'#FFB74D':'var(--go)'};font-weight:bold">${p.name}${hasEdits&&!isSelected?' <span style="font-size:7px;color:#FFB74D;">✎</span>':''}</td>`;
+      : `<td style="color:${hasEdits&&!isSelected?'#FFB74D':'var(--go)'};font-weight:bold">${p.name}${(!isMC&&p.maxPossible&&liveTI>=p.maxPossible)?` <span style="font-size:7px;color:var(--gn);border:1px solid var(--gn);border-radius:2px;padding:0 2px;vertical-align:1px;" title="Achieves the theoretical maximum of ${p.maxPossible} cases per layer for this case and pallet size">MAX</span>`:''}${hasEdits&&!isSelected?' <span style="font-size:7px;color:#FFB74D;">✎</span>':''}</td>`;
 
     return `<tr id="patRow_${i}" class="${isSelected?'selr':''}"${rowStyle} onclick="selPt(${i})" title="${p.desc||''}">
       <td style="color:var(--dm)">${i+1}</td>
@@ -7534,21 +7756,35 @@ async function _loadSettingsCloud(){
     if(row && row.data && typeof row.data === 'object'){
       Object.assign(KBM_SETTINGS, row.data);  // cloud is source of truth for this user
       _saveSettings();                         // mirror into the local cache
+      // Mirror the cloud copy of the Report Builder custom layout into its
+      // localStorage slot so it's available on this device too.
+      if(KBM_SETTINGS.rbCustom){
+        try{ localStorage.setItem('kbm_rb_custom_layout', JSON.stringify(KBM_SETTINGS.rbCustom)); }catch(e2){}
+      }
       _applySettings();
       const ov = document.getElementById('kbmOverlay');
       if(ov && ov.classList.contains('open')) mnuSettingsRefresh();
+    } else {
+      console.warn('[settings] cloud load returned no data — first run for this user, or the /api/settings route returned an empty row');
     }
-  }catch(e){ /* offline or loose file — keep local settings */ }
+  }catch(e){ console.warn('[settings] cloud load failed (offline or loose file):', e); /* keep local settings */ }
 }
 async function _saveSettingsCloud(){
   try{
-    await fetch(SETTINGS_API, {
+    const res = await fetch(SETTINGS_API, {
       method:'PUT',
       headers:{ 'Content-Type':'application/json' },
       credentials:'same-origin',
       body: JSON.stringify({ data: KBM_SETTINGS })
     });
-  }catch(e){ /* offline — the localStorage copy still holds the change */ }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    if(typeof _showNotification==='function') _showNotification('✓ Settings synced to your account', false);
+  }catch(e){
+    // Surface the failure instead of hiding it — settings still saved locally,
+    // but the user (and Brandon, debugging) should know cloud sync didn't happen.
+    console.warn('[settings] cloud save failed:', e);
+    if(typeof _showNotification==='function') _showNotification('⚠ Settings saved on this device only — cloud sync failed ('+(e.message||'offline')+')', true);
+  }
 }
 
 // Apply loaded settings to the UI (called once on init and after settings save)
@@ -9033,6 +9269,11 @@ const RB_CUSTOM_KEY = 'kbm_rb_custom_layout';
 function rbSaveCustom(){
   try{
     localStorage.setItem(RB_CUSTOM_KEY, JSON.stringify(RB.blocks));
+    // Also persist to the user's account so the custom layout survives
+    // logout/login, browser changes, and new devices.
+    KBM_SETTINGS.rbCustom = JSON.parse(JSON.stringify(RB.blocks));
+    _saveSettings();
+    _saveSettingsCloud();
     leSetStatus && leSetStatus('✓ Custom layout saved', '#5ec97a');
     _showNotification('✓ Custom layout saved!', false);
     // Update button to show saved state
@@ -9043,7 +9284,12 @@ function rbSaveCustom(){
 
 function rbLoadCustom(){
   try{
-    const raw = localStorage.getItem(RB_CUSTOM_KEY);
+    let raw = localStorage.getItem(RB_CUSTOM_KEY);
+    // Fresh browser/device: fall back to the copy synced to the user's account
+    if(!raw && KBM_SETTINGS.rbCustom){
+      raw = JSON.stringify(KBM_SETTINGS.rbCustom);
+      try{ localStorage.setItem(RB_CUSTOM_KEY, raw); }catch(e2){}
+    }
     if(!raw){
       // No saved layout yet — start with a blank canvas for the user to build on
       if(RB.blocks.length && !confirm('Clear current layout and start a blank Custom canvas?')) return;
