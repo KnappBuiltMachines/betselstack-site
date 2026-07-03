@@ -6,13 +6,13 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="bsp-wrap">
+    <div className="bsp-wrap">
       <style>{`
         .bsp-wrap {
           max-width: 760px;
           margin: 0 auto;
           padding: 56px 24px 96px;
-          color: #1f2937;
+          color: #d6dbe3;
           line-height: 1.7;
           font-size: 16px;
         }
@@ -20,17 +20,17 @@ export default function PrivacyPage() {
           font-size: 2.1rem;
           line-height: 1.2;
           margin: 0 0 8px;
-          color: #111827;
+          color: #f5f7fa;
         }
         .bsp-updated {
-          color: #6b7280;
+          color: #9aa3af;
           font-size: 0.95rem;
           margin: 0 0 36px;
         }
         .bsp-wrap h2 {
           font-size: 1.25rem;
           margin: 40px 0 12px;
-          color: #111827;
+          color: #f5f7fa;
         }
         .bsp-wrap p {
           margin: 0 0 14px;
@@ -43,7 +43,7 @@ export default function PrivacyPage() {
           margin-bottom: 8px;
         }
         .bsp-wrap a {
-          color: #1d4ed8;
+          color: #7fb2ff;
           text-decoration: underline;
         }
         @media (max-width: 480px) {
@@ -193,8 +193,8 @@ export default function PrivacyPage() {
       <h2>Contact us</h2>
       <p>
         If you have questions about this policy or your data, contact us at{" "}
-        <a href="mailto:support@betselstack.com">support@betselstack.com</a>.
+        <a href="mailto:team@betselstack.com">team@betselstack.com</a>.
       </p>
-    </main>
+    </div>
   );
 }
