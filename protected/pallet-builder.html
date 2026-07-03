@@ -847,6 +847,68 @@ function overlapRatio(plsA, plsB){
   return total > 0 ? r2(Math.min(1, overlap / total)) : 0;
 }
 
+// ── Genuine interlock quality (0–1) ─────────────────────────────
+// overlapRatio() above is ~1.0 for ANY two full layers (their footprints
+// almost fully overlap regardless of arrangement), so it cannot tell a
+// real interlock from a column stack. What actually creates interlock is
+// BRIDGING: a case in the alternate layer resting across two or more
+// cases below, tying their seams together. This measures the fraction of
+// layer-B cases that genuinely bridge: supported by >= 2 layer-A cases
+// (each contributing >= 8% of the case's footprint) with no single
+// supporter covering >= 92% (which would mean the case just sits on one
+// case below — column behaviour). A symmetric pattern whose 180° turn is
+// identical to itself scores 0 here, exactly as it should.
+function interlockQuality(plsA, plsB){
+  if(!plsA || !plsB || !plsA.length || !plsB.length) return 0;
+  const B = plsB.length > 250 ? plsB.slice(0, 250) : plsB;
+  let bridged = 0;
+  for(const b of B){
+    const area = b.w * b.l;
+    if(area <= 0) continue;
+    let supporters = 0, maxShare = 0;
+    for(const a of plsA){
+      const ox = Math.max(0, Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x));
+      const oy = Math.max(0, Math.min(a.y+a.l, b.y+b.l) - Math.max(a.y, b.y));
+      const ov = ox * oy;
+      if(ov > area * 0.08) supporters++;
+      if(ov > maxShare) maxShare = ov;
+    }
+    if(supporters >= 2 && maxShare < area * 0.92) bridged++;
+  }
+  return r2(bridged / B.length);
+}
+
+// Largest internal gap in a layer (checked along rows and columns).
+// Big internal gaps break interlock bridging and let cases shift in
+// transit, so they must pull the stability score down.
+function maxInternalGapG(pls){
+  if(!pls || pls.length < 2) return 0;
+  const rk = v => Math.round(v * 100) / 100;
+  const rowMap = new Map(), colMap = new Map();
+  pls.forEach(p => {
+    const ky = rk(p.y); if(!rowMap.has(ky)) rowMap.set(ky, []); rowMap.get(ky).push(p);
+    const kx = rk(p.x); if(!colMap.has(kx)) colMap.set(kx, []); colMap.get(kx).push(p);
+  });
+  let mg = 0;
+  rowMap.forEach(row => {
+    const s = [...row].sort((a,b) => a.x - b.x);
+    for(let i=1; i<s.length; i++) mg = Math.max(mg, s[i].x - (s[i-1].x + s[i-1].w));
+  });
+  colMap.forEach(col => {
+    const s = [...col].sort((a,b) => a.y - b.y);
+    for(let i=1; i<s.length; i++) mg = Math.max(mg, s[i].y - (s[i-1].y + s[i-1].l));
+  });
+  return mg;
+}
+
+// Gap fraction = largest internal gap / smallest case dimension in the layer
+function _gapFracOf(pls){
+  if(!pls || !pls.length) return 0;
+  let sm = Infinity;
+  pls.forEach(p => { sm = Math.min(sm, p.w, p.l); });
+  return sm > 0 ? maxInternalGapG(pls) / sm : 0;
+}
+
 function continuousSeamFraction(pls, axis){
   if(!pls.length) return 1;
   const lines = new Map();
@@ -992,17 +1054,32 @@ function caseSupportPct(pls, palW, palL, edgeOff, HI, plsB){
   return { avg: avg, min: r2(minSupport) };
 }
 
-// New Stability % = (Interlock×0.45 + Support×0.35 + Centering×0.15 + Overhang×0.05) × 100
-// hasInterlock: true if pattern has genuine alternating layers
-// supportPct:   caseSupportPct (0–100)
-// centeringPct: weightDistScore (0–100), used as centering proxy
-// ovW/ovL:      overhang in inches (0 = no overhang)
-function newStability(hasInterlock, supportPct, centeringPct, ovW, ovL){
-  const interlock = hasInterlock ? 0.45 : 0;
-  const support   = 0.35 * (supportPct/100);
-  const centering = 0.15 * (centeringPct/100);
-  const overhang  = (Math.abs(ovW)<0.01 && Math.abs(ovL)<0.01) ? 0.05 : 0;
-  return r2((interlock + support + centering + overhang) * 100);
+// Stability % — 0–100 composite:
+//   Interlock  45 × Q  where Q is MEASURED interlock quality (0–1): the
+//              fraction of alternate-layer cases that genuinely bridge two
+//              or more cases below. A column stack — or a "alternating"
+//              pattern whose 180° turn is identical to itself — earns 0.
+//   Support    35 × caseSupportPct/100
+//   Centering  15 × weightDistScore/100
+//   Overhang    5 when the load has no overhang
+//   Gap deduction: up to −20 as the largest internal gap approaches half
+//              of the smallest case dimension (gaps break bridging and
+//              let cases walk in transit).
+// interlock arg: pass a 0–1 quality fraction (preferred, from
+// interlockQuality) or a boolean for legacy call sites.
+function newStability(interlock, supportPct, centeringPct, ovW, ovL, gapFrac){
+  const q = interlock === true ? 1
+          : (interlock === false || interlock === undefined || interlock === null) ? 0
+          : Math.max(0, Math.min(1, interlock));
+  const interlockPts = 0.45 * q;
+  const supportPts   = 0.35 * (supportPct/100);
+  const centeringPts = 0.15 * (centeringPct/100);
+  const overhangPts  = (Math.abs(ovW)<0.01 && Math.abs(ovL)<0.01) ? 0.05 : 0;
+  let gapPen = 0;
+  if(typeof gapFrac === 'number' && gapFrac > 0.1){
+    gapPen = 0.20 * Math.min(1, (gapFrac - 0.1) / 0.4);
+  }
+  return r2(Math.max(0, Math.min(100, (interlockPts + supportPts + centeringPts + overhangPts - gapPen) * 100)));
 }
 
 // ── Edge-offset wrapper ───────────────────────────────────────
@@ -1387,6 +1464,40 @@ function _bpCore(cW, cL, pW, pL){
     return out;
   };
 
+  // Horizontal counterpart of distributeFills: distribute every row of cases
+  // ACROSS the space available to it (bounded by surrounding cases and the
+  // pallet edges), so leftover width splits into small, even, centered gaps
+  // instead of accumulating as one empty strip on the left or right side.
+  const distributeFillsX=(pls,pW,pL)=>{
+    if(pls.length<2) return pls;
+    const rows=new Map();
+    pls.forEach((p,i)=>{const key=Math.round(p.y*10)/10;if(!rows.has(key))rows.set(key,[]);rows.get(key).push({p,i});});
+    const out=pls.map(p=>({...p}));
+    rows.forEach(rowArr=>{
+      if(rowArr.length<2) return;
+      const idxSet=new Set(rowArr.map(o=>o.i));
+      const ys=Math.min(...rowArr.map(o=>o.p.y)), ye=Math.max(...rowArr.map(o=>o.p.y+o.p.l));
+      const rowL=Math.min(...rowArr.map(o=>o.p.x));
+      const rowR=Math.max(...rowArr.map(o=>o.p.x+o.p.w));
+      let left=0, right=pW;
+      pls.forEach((q,qi)=>{
+        if(idxSet.has(qi)) return;
+        if(q.y<ye-0.05&&q.y+q.l>ys+0.05){
+          if(q.x+q.w<=rowL+0.05) left=Math.max(left,q.x+q.w);
+          else if(q.x>=rowR-0.05) right=Math.min(right,q.x);
+        }
+      });
+      const sorted=rowArr.slice().sort((a,b)=>a.p.x-b.p.x);
+      const totalW=sorted.reduce((s,o)=>s+o.p.w,0);
+      const slack=(right-left)-totalW;
+      if(slack<=0.05) return;
+      const gap=Math.min(slack/(sorted.length-1),MAXGAP);
+      let x=left+(slack-gap*(sorted.length-1))/2;
+      sorted.forEach(o=>{out[o.i]={...out[o.i],x:rp(x)}; x+=o.p.w+gap;});
+    });
+    return out;
+  };
+
   const addPat=(name,desc,rawPls,skipBillboard)=>{
     if(!rawPls||rawPls.length<1) return;
     const ohl=ohIn+EPS;
@@ -1409,6 +1520,9 @@ function _bpCore(cW, cL, pW, pL){
 
       const dist=distributeFills(pls,pW,pL);
       if(validate(dist)) pls=dist;
+
+      const distX=distributeFillsX(pls,pW,pL);
+      if(validate(distX)) pls=recentre(distX);
     }
     if(!validate(pls)) return;
     const TI=pls.length; if(TI<1) return;
@@ -1443,7 +1557,8 @@ function _bpCore(cW, cL, pW, pL){
     const _oxW=r2(((mxX-mnX)-pW)/2),_oxL=r2(((mxY-mnY)-pL)/2);const ohW=(pW<=pL)?_oxW:_oxL,ohL=(pW<=pL)?_oxL:_oxW;
     const supp=caseSupportPct(pls,pW,pL,0,1,plsB);
     const cen=weightDistScore(pls,pW,pL);
-    const stab=newStability(true,supp.avg,cen,ohW,ohL);
+    const ilq=interlockQuality(pls,plsB);
+    const stab=newStability(ilq,supp.avg,cen,ohW,ohL,_gapFracOf(pls));
     const il=r2(overlapRatio(pls,plsB)*100);
     PATS.push({
       name,desc:desc||name,orientDesc:'',
@@ -1452,6 +1567,7 @@ function _bpCore(cW, cL, pW, pL){
       caseSupportPct:supp.avg,minCaseSupport:supp.min,stability:stab,interlockPct:il,
       orisA:'',orisB:'',zoneW:pW,zoneL:pL,ohIn,
       wdA:cen,wdB:cen,masterW:r2(pW),masterL:r2(pL),_score:scorePattern(pls),
+      _maxGap:maxInternalGap(pls),_ilq:ilq,
     });
   };
 
@@ -2230,9 +2346,16 @@ function _bpCore(cW, cL, pW, pL){
       }
       if(pls.length!==n||blocksUsed<2) continue;
       const before=PATS.length;
+      // NOTE: block patterns no longer skip the billboard/distribution pass.
+      // Each block's grid is corner-anchored, so leftover space used to pile
+      // up as one empty strip at a pallet edge (shifted, un-centered look).
+      // Running the standard distribution — every pass validated and reverted
+      // on any overlap — spreads that slack into small, even, centered gaps
+      // and pulls outer case faces flush with the pallet perimeter on both
+      // the length and width sides (billboarding).
       addPat(`5-Block ${pls.length}`,
         `Block pattern — pallet split into ${blocksUsed} rectangular blocks, each filled with its best upright single-orientation grid (raster-point block sweep).`,
-        pls, true);
+        pls);
       if(PATS.length>before) _bAccepted++;
       if(_bAccepted>=40) break; // plenty of distinct block layouts kept
     }
@@ -2411,8 +2534,27 @@ function _bpCore(cW, cL, pW, pL){
   // Keep patterns within a useful range (not too far below max TI)
   const minTI=Math.max(Math.ceil(maxTI*0.5), maxTI>12?6:maxTI>6?4:2);
   const filtered=PATS.filter(p=>p.TI>=minTI);
-  filtered.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
-  const MAX_RESULTS=120;
+
+  // ── QUALITY GATE (quality over quantity) ─────────────────────────
+  // A pattern whose largest internal gap exceeds half the smallest case
+  // dimension is not usable in real transit: cases have room to walk,
+  // and alternate layers cannot bridge the void (a case spanning such a
+  // gap has under 50% support). These layouts look acceptable in 2D but
+  // produce the loose, tippy stacks that are obvious in 3D — so they are
+  // removed outright rather than merely ranked lower. Packaging
+  // engineers should only be choosing among patterns they could
+  // actually ship. Fallback: if a case/pallet combination leaves fewer
+  // than 3 tight patterns, keep the least-gappy ones so the list is
+  // never empty.
+  const GATE=Math.min(MAX_GAP_OK, MAXGAP*1.5); // interlock-breaking gap, or 1.5× the engine's own intentional gap cap — whichever is stricter
+  const _tight=filtered.filter(p=>(p._maxGap||0)<=GATE+EPS);
+  const usable=_tight.length>=3 ? _tight
+    : filtered.slice().sort((a,b)=>(a._maxGap||0)-(b._maxGap||0))
+        .slice(0,Math.min(filtered.length,3));
+  usable.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
+  // Cap lowered from 120: a shorter list of shippable patterns beats a
+  // long list padded with layouts nobody would run.
+  const MAX_RESULTS=60;
 
   // Find the highest-TI pure-O and pure-X patterns from the FULL
   // (unfiltered) registry — these represent each orientation's true max.
@@ -2436,7 +2578,7 @@ function _bpCore(cW, cL, pW, pL){
   // the forced patterns. This guarantees both pure patterns survive
   // without the pop/push-ordering bug of removing each other.
   const forced=[bestPureO,bestPureX].filter(Boolean);
-  const rest=filtered.filter(p=>!forced.includes(p));
+  const rest=usable.filter(p=>!forced.includes(p));
   const result=[...rest.slice(0,Math.max(0,MAX_RESULTS-forced.length)),...forced];
 
   result.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
@@ -2467,11 +2609,14 @@ function getPlsForLayer(layerIdx){
   const pat = ST.patterns[ST.selPat];
   const key = String(layerIdx);
   if(ST.layerEdits && ST.layerEdits[key] !== undefined){
-    // Edited layer: interlock still applies — odd layers get the 180° turn.
-    // Edits are stored in the un-rotated base frame, so the turn stays correct
-    // no matter how many times interlock is toggled.
-    const turn = ST.interlockMode && layerIdx%2===1;
-    return turn ? _rot180Layer(ST.layerEdits[key], pat) : ST.layerEdits[key];
+    // Edited layer: WYSIWYG — hand-placed cases render exactly where the
+    // user put them in EVERY view (2D edit canvas, 3D, stats), whether
+    // interlock is on or off. Previously the 180° interlock turn was
+    // re-applied here to odd edited layers while the 2D canvas showed the
+    // raw stored edits — so an adjusted layer appeared rotated 180° in 3D
+    // relative to what the user placed, producing misaligned, overhanging
+    // stacks. Once a layer is hand-edited, its placements are absolute.
+    return ST.layerEdits[key];
   }
   // Multi-case manual build: no edits yet = empty layer (user builds from scratch)
   if(pat.multiCaseManual) return [];
@@ -3270,10 +3415,12 @@ function leGetPlacements(layer) {
     if(pat.multiCaseManual){
       ST.layerEdits[key] = [];
     } else {
-      // Single-case: initialise from the base (layer-A) placements. The 180°
-      // interlock turn is applied at display time in getPlsForLayer, so edits
-      // are always stored un-rotated — keeping interlock toggling consistent.
-      ST.layerEdits[key] = pat.placements.map(p => ({...p}));
+      // Single-case: initialise from what is CURRENTLY DISPLAYED for this
+      // layer — getPlsForLayer supplies the interlocked (180°-turned) layout
+      // for odd layers when interlock is on. The layout therefore never
+      // jumps the moment editing begins, and what the user places is exactly
+      // what 3D and the stats render — WYSIWYG.
+      ST.layerEdits[key] = getPlsForLayer(idx).map(p => ({...p}));
     }
   }
   return ST.layerEdits[key];
@@ -4439,7 +4586,7 @@ function leUpdateStats(){
   const seamFracB = plsB && pat.seamFracB !== undefined ? pat.seamFracB : seamFracA;
 
   // Stability
-  const stability3 = newStability(hasB && !!plsB, supportPct3, wdA, ovW, ovL);
+  const stability3 = newStability((hasB && plsB) ? interlockQuality(plsA, plsB) : 0, supportPct3, wdA, ovW, ovL, _gapFracOf(plsA));
   const stability = TI !== pat.TI ? stability3 : (pat.stability !== undefined ? pat.stability : stability3);
 
   // Pattern name
@@ -4529,7 +4676,8 @@ function leSavePattern(){
   const interlockPct = r2(overlapRatio(edA, edB)*100);
   const seamFracA = continuousSeamFraction(edA,'x');
   const seamFracB = continuousSeamFraction(edB,'x');
-  const stability = Math.min(100,Math.max(0,Math.round((wdA+wdB)/2*0.35+interlockPct*0.25+(1-(seamFracA+seamFracB)/2)*25+15)));
+  const _suppSv = caseSupportPct(edA, pal.w, pal.l, 0, ST.stats.HI||2, edB);
+  const stability = newStability(interlockQuality(edA, edB), _suppSv.avg, r2((wdA+wdB)/2), ohW, ohL, _gapFracOf(edA));
   const orisA = [...new Set(edA.map(p=>p.ori||0))].sort().join('°, ')+'°';
   const orisB = [...new Set(edB.map(p=>p.ori||0))].sort().join('°, ')+'°';
 
@@ -6737,7 +6885,7 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
       const minSuppV = _suppV.min;
       const cenPct  = weightDistScore(plsA, pal.w, pal.l);
       const hasInterlock2 = !!(hasB && plsB2 && plsB2.length);
-      const stab2 = newStability(hasInterlock2, suppPct, cenPct, ovW2, ovL2);
+      const stab2 = newStability(hasInterlock2 ? interlockQuality(plsA, plsB2) : 0, suppPct, cenPct, ovW2, ovL2, _gapFracOf(plsA));
       const cubicEff2 = r2(plsA.reduce((s,q)=>s+q.w*q.l,0)/(pal.w*pal.l)*100);
       return {TI:TI2,TI_B:TI_B2,HI,cubicEff:cubicEff2,caseSupportPct:suppPct,minCaseSupport:minSuppV,stability:stab2,ovW:ovW2,ovL:ovL2};
     };
@@ -6909,7 +7057,7 @@ function _syncStatsFromPattern(i){
   const minSupp = _supp.min;
   const cenPct  = weightDistScore(plsA, pal.w, pal.l);
   const hasInterlock = hasB && !!plsB;
-  const stab  = newStability(hasInterlock, suppPct, cenPct, ovW, ovL);
+  const stab  = newStability(hasInterlock ? interlockQuality(plsA, plsB) : 0, suppPct, cenPct, ovW, ovL, _gapFracOf(plsA));
   const palArea = pal.w * pal.l;
   const cubicEff = r2(plsA.reduce((s,q)=>s+q.w*q.l,0)/palArea*100);
   const totalH   = r2(pal.h + cH * HI + getSlipSheetH());
@@ -8920,14 +9068,14 @@ function rbMixedLayerTable(D, props){
     <td style="${tdStyle};font-weight:bold;">${r.total}</td>
   </tr>`).join('');
 
-  // Totals row
-  const totalRow = `<tr style="background:#f0f0f0;font-weight:bold;">
-    <td style="${tdL}">TOTAL</td>
+  // Totals row — dark navy bar with bright yellow text (matches the PDF report)
+  const totalRow = `<tr style="background:#1a2535;font-weight:bold;color:#ffe600;">
+    <td style="${tdL};color:#ffe600;border-color:#1a2535;">TOTAL</td>
     ${valid.map(c=>{
       const tot = rows.reduce((s,r)=>s+(r.counts[c.id]||0),0);
-      return `<td style="${tdStyle};font-weight:bold;">${tot}</td>`;
+      return `<td style="${tdStyle};font-weight:bold;color:#ffe600;border-color:#1a2535;">${tot}</td>`;
     }).join('')}
-    <td style="${tdStyle};font-weight:bold;">${rows.reduce((s,r)=>s+r.total,0)}</td>
+    <td style="${tdStyle};font-weight:bold;color:#ffe600;border-color:#1a2535;">${rows.reduce((s,r)=>s+r.total,0)}</td>
   </tr>`;
 
   // Weight summary — per case type + totals
@@ -8959,9 +9107,9 @@ function rbMixedLayerTable(D, props){
           <span style="color:#666;">Pallet Tare (${pal.label||'Pallet'})</span>
           <span style="font-weight:bold;color:#333;">${wtFmt(palTare)}</span>
         </div>`:''}
-        <div style="font-size:9px;display:flex;justify-content:space-between;margin-top:2px;background:#fff;padding:2px 4px;border-radius:2px;border:1px solid #e0e0e0;">
-          <span style="font-weight:bold;color:#333;">TOTAL PALLET WEIGHT</span>
-          <span style="font-weight:bold;color:#f5a623;">${wtFmt(totalPalletWt)}</span>
+        <div style="font-size:9px;display:flex;justify-content:space-between;margin-top:2px;background:#1a2535;padding:2px 4px;border-radius:2px;">
+          <span style="font-weight:bold;color:#ffe600;">TOTAL PALLET WEIGHT</span>
+          <span style="font-weight:bold;color:#ffe600;">${wtFmt(totalPalletWt)}</span>
         </div>
       </div>
     </div>` : '';
@@ -9685,10 +9833,13 @@ function rbPdfMixedLayerTable(doc, block, bx, by, bw, bh){
     cy += rowH;
   }
 
-  // Totals row
+  // Totals row — dark navy bar with bright yellow text for high contrast.
+  // (The old setFillColor(245,166,35,80) call passed FOUR args, which jsPDF
+  // reads as CMYK — producing an unintended dark muddy bar with dark gray
+  // text on top, nearly unreadable in the printed report.)
   if(cy + rowH <= by+bh-2){
-    doc.setFillColor(245,166,35,80); doc.rect(bx, cy, bw, rowH, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(5.5); doc.setTextColor(40,40,40);
+    doc.setFillColor(26,37,53); doc.rect(bx, cy, bw, rowH, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(5.5); doc.setTextColor(255,230,0);
     doc.text('TOTAL', bx+1, cy+rowH*0.68);
     valid.forEach((c,j)=>{
       const cx2 = bx + layerColW + j*caseColW;
@@ -9730,8 +9881,11 @@ function rbPdfMixedLayerTable(doc, block, bx, by, bw, bh){
     }
     const totalPalletWt2 = r2(totalCaseWt2 + palTare2);
     if(cy <= by+bh-2){
-      doc.setFillColor(245,166,35,60); doc.rect(bx, cy-2, bw, 4.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(26,26,26);
+      // Dark navy bar with bright yellow text — same fix as the layer TOTAL
+      // row (the 4-arg setFillColor was read as CMYK and rendered near-black
+      // with dark text on top).
+      doc.setFillColor(26,37,53); doc.rect(bx, cy-2, bw, 4.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(255,230,0);
       doc.text('TOTAL PALLET WEIGHT:', bx+1, cy+1.2);
       doc.text(wtFmt(totalPalletWt2), bx+bw-1, cy+1.2, {align:'right'});
     }
