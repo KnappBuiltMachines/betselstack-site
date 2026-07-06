@@ -480,6 +480,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
 
 <div id="main">
   <div id="vbar">
+    <button id="csBtn" onclick="csOpen()" title="Calculate case dimensions from primary package dimensions, then compare configurations at the pallet level" style="background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:4px;padding:4px 12px;letter-spacing:1px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;white-space:nowrap;margin-right:2px;">📦 CASE SIZE</button>
     <div style="display:flex;border:1px solid var(--bd);border-radius:4px;overflow:hidden;">
       <button id="v2d" onclick="setView('2d')" style="background:var(--go);color:#0c0e14;border:none;border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">2D</button>
       <button id="v3d" onclick="setView('3d')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">3D</button>
@@ -588,6 +589,106 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
   </div><!-- /caBelow -->
   </div><!-- /caWrap -->
 </div><!-- /main -->
+
+<!-- ═══════════════ CASE SIZE CALCULATOR MODAL ═══════════════ -->
+<div id="csOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:5000;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;">
+  <div style="background:#1a1a1a;border:1px solid var(--go);border-radius:8px;max-width:1060px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,.6);font-family:'Share Tech Mono',monospace;">
+    <!-- header -->
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:2px solid var(--go);">
+      <span style="font-size:16px;color:var(--go);letter-spacing:3px;font-weight:bold;">📦 CASE SIZE CALCULATOR</span>
+      <span style="font-size:11px;color:var(--dm);letter-spacing:1px;flex:1;">PRIMARY PACKAGE → CASE → PALLET</span>
+      <button onclick="csClose()" style="background:none;border:none;color:var(--dm);font-size:20px;cursor:pointer;line-height:1;padding:0 4px;">✕</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:0;">
+      <!-- ── left: inputs ── -->
+      <div style="flex:0 0 280px;min-width:260px;padding:14px 16px;border-right:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <div class="st" style="margin-bottom:5px;">PRIMARY PACKAGE</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;" id="csPkgBtns">
+            <button id="csPkgCuboid" onclick="csSetPkg('cuboid')" style="flex:1;background:var(--go);color:#1a1a1a;border:none;border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">▭ CUBOID</button>
+            <button id="csPkgCyl" onclick="csSetPkg('cylinder')" style="flex:1;background:#333333;color:#aaaaaa;border:1px solid var(--bd);border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">◎ CYLINDER</button>
+          </div>
+          <!-- cuboid inputs -->
+          <div id="csCuboidIn" style="display:flex;gap:6px;">
+            <div style="flex:1;"><div class="dl">L (<span class="csU"></span>)</div><input type="number" id="csPL" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl">W (<span class="csU"></span>)</div><input type="number" id="csPW" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl">H (<span class="csU"></span>)</div><input type="number" id="csPH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+          </div>
+          <!-- cylinder inputs -->
+          <div id="csCylIn" style="display:none;gap:6px;">
+            <div style="flex:1;"><div class="dl">DIA (<span class="csU"></span>)</div><input type="number" id="csDia" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl">H (<span class="csU"></span>)</div><input type="number" id="csCylH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+          </div>
+          <div style="margin-top:6px;">
+            <div class="dl">UNIT WEIGHT (<span class="csWU"></span>)</div>
+            <input type="number" id="csUnitWt" min="0" step="0.01" style="width:100%;" oninput="csGenerate()"/>
+          </div>
+        </div>
+        <div>
+          <div class="st" style="margin-bottom:5px;">CASE PARAMETERS</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <div style="flex:1;"><div class="dl">CASE COUNT</div><input type="number" id="csCount" min="1" step="1" value="12" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl">MAX LAYERS IN CASE</div>
+              <select id="csMaxLayers" onchange="csGenerate()" style="width:100%;background:#1e1e1e;color:var(--tx);border:1px solid var(--bd);border-radius:3px;padding:4px;font-size:13px;font-family:'Share Tech Mono',monospace;">
+                <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:6px;">
+            <div class="dl">CARTON STYLE</div>
+            <select id="csStyle" onchange="csGenerate()" style="width:100%;background:#1e1e1e;color:var(--tx);border:1px solid var(--bd);border-radius:3px;padding:4px;font-size:13px;font-family:'Share Tech Mono',monospace;">
+              <option value="RSC" selected>RSC — Regular Slotted Container</option>
+              <option value="HSC">HSC — Half Slotted Container</option>
+              <option value="TRAY">Tray</option>
+              <option value="BLISS">Bliss Box</option>
+              <option value="DCT">Die-Cut Tray</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <div style="flex:1.4;">
+              <div class="dl">BOARD / FLUTE</div>
+              <select id="csFlute" onchange="csFluteChange()" style="width:100%;background:#1e1e1e;color:var(--tx);border:1px solid var(--bd);border-radius:3px;padding:4px;font-size:13px;font-family:'Share Tech Mono',monospace;">
+                <option value="0.0625">E-Flute (1/16")</option>
+                <option value="0.125">B-Flute (1/8")</option>
+                <option value="0.15625" selected>C-Flute (5/32")</option>
+                <option value="0.25">BC Double Wall (1/4")</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div style="flex:1;">
+              <div class="dl">THICKNESS (<span class="csU"></span>)</div>
+              <input type="number" id="csThick" min="0" step="0.015625" style="width:100%;" disabled oninput="csGenerate()"/>
+            </div>
+          </div>
+          <div>
+            <div class="dl" title="Extra internal room added to each inside dimension for fit / nesting">CLEARANCE PER DIM (<span class="csU"></span>)</div>
+            <input type="number" id="csClr" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/>
+          </div>
+        </div>
+        <div>
+          <div class="st" style="margin-bottom:5px;">PALLET COMPARISON</div>
+          <div class="dl">PALLET SIZE</div>
+          <select id="csPallet" onchange="csRunCompare()" style="width:100%;background:#1e1e1e;color:var(--tx);border:1px solid var(--bd);border-radius:3px;padding:4px;font-size:13px;font-family:'Share Tech Mono',monospace;margin-bottom:8px;"></select>
+          <button onclick="csRunCompare()" class="btn" style="width:100%;background:linear-gradient(135deg,var(--go),var(--g2));color:#1a1a1a;font-weight:bold;padding:8px;letter-spacing:2px;font-size:13px;border:none;">⚖ COMPARE ON PALLET</button>
+          <div style="font-size:10px;color:var(--dm);margin-top:8px;line-height:1.5;">
+            OD dimensions &amp; corrugate weights are engineering estimates based on standard score allowances and typical board basis weights. Verify with your box supplier.
+          </div>
+        </div>
+      </div>
+      <!-- ── right: results ── -->
+      <div style="flex:1;min-width:420px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;max-height:72vh;overflow:auto;">
+        <div>
+          <div class="st" style="margin-bottom:6px;">CASE CONFIGURATIONS <span id="csCfgCount" style="color:var(--dm);font-size:10px;letter-spacing:1px;"></span></div>
+          <div id="csResults" style="font-size:12px;color:var(--dm);">Enter primary package dimensions and a case count to generate configurations.</div>
+        </div>
+        <div id="csCompareWrap" style="display:none;">
+          <div class="st" style="margin-bottom:6px;">PALLET-LEVEL COMPARISON <span id="csCmpPal" style="color:var(--dm);font-size:10px;letter-spacing:1px;"></span></div>
+          <div id="csCompare"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -10075,6 +10176,424 @@ renderCaseList();
     initTHR();            // initialize Three.js renderer so 3D is ready
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════
+// CASE SIZE CALCULATOR
+// Primary package (cylinder or cuboid) → candidate case configurations
+// (count factorizations) → external case dims + est. weight per carton
+// style → pallet-level comparison via the pattern engine.
+// All internal math in inches / lbs; converted at the UI boundary.
+// ═══════════════════════════════════════════════════════════════════════
+const CS = {
+  pkgType: 'cuboid',
+  results: [],          // generated case configurations
+  compared: false,
+};
+
+// ── Carton style definitions ────────────────────────────────────────────
+// od(): inside dims + score allowances → outside dims (t = board caliper)
+// blankArea(): approx corrugate blank area (sq in) from OUTSIDE dims,
+//              used for material-weight estimation.
+const CS_STYLES = {
+  RSC:  { label:'RSC',
+          od:(L,W,H,t)=>({L:L+2*t, W:W+2*t, H:H+4*t}),
+          blankArea:(L,W,H)=>(2*(L+W)+1.5)*(H+W) },
+  HSC:  { label:'HSC',
+          od:(L,W,H,t)=>({L:L+2*t, W:W+2*t, H:H+2*t}),
+          blankArea:(L,W,H)=>(2*(L+W)+1.5)*(H+W/2) },
+  TRAY: { label:'Tray',
+          od:(L,W,H,t)=>({L:L+2*t, W:W+2*t, H:H+t}),
+          blankArea:(L,W,H)=>(L+2*H)*(W+2*H)*1.10 },
+  BLISS:{ label:'Bliss',
+          od:(L,W,H,t)=>({L:L+2*t, W:W+4*t, H:H+2*t}),
+          blankArea:(L,W,H)=>(L+2*H)*(W+2*H)*1.15 },
+  DCT:  { label:'Die-Cut Tray',
+          od:(L,W,H,t)=>({L:L+4*t, W:W+4*t, H:H+t}),
+          blankArea:(L,W,H)=>(L+2*H)*(W+2*H)*1.30 },
+};
+
+// Approx. single/double-wall board basis weight (lb/ft²) from caliper (in).
+// Anchors: E≈0.075, B≈0.10, C≈0.11, BC≈0.15 — linear fit, floor at 0.05.
+function csBoardLbPerFt2(t){ return Math.max(0.05, 0.05 + 0.4*t); }
+
+// ── Open / close ────────────────────────────────────────────────────────
+function csOpen(){
+  const ov = document.getElementById('csOverlay');
+  ov.style.display = 'flex';
+  // Unit labels
+  document.querySelectorAll('.csU').forEach(el=>el.textContent=u());
+  document.querySelectorAll('.csWU').forEach(el=>el.textContent=wu());
+  // Clearance default: 1/8" (or 3 mm) if empty
+  const clr = document.getElementById('csClr');
+  if(clr.value==='') clr.value = ST.isMetric ? 3 : 0.125;
+  // Board thickness from flute preset
+  csFluteChange(true);
+  // Pallet selector mirrors main pallet buttons
+  const sel = document.getElementById('csPallet');
+  sel.innerHTML = Object.keys(PALLETS).map(k=>
+    `<option value="${k}" ${k===ST.palletKey?'selected':''}>${PALLETS[k].label}${k==='custom'?` — ${dp(PALLETS.custom.w)}×${dp(PALLETS.custom.l)}${u()}`:''}</option>`
+  ).join('');
+  csGenerate();
+}
+function csClose(){ document.getElementById('csOverlay').style.display='none'; }
+document.getElementById('csOverlay').addEventListener('mousedown', e=>{
+  if(e.target===document.getElementById('csOverlay')) csClose();
+});
+
+function csSetPkg(t){
+  CS.pkgType = t;
+  const on='background:var(--go);color:#1a1a1a;border:none;',
+        off='background:#333333;color:#aaaaaa;border:1px solid var(--bd);';
+  const base='flex:1;border-radius:3px;padding:4px 8px;font-size:12px;font-family:\'Share Tech Mono\',monospace;cursor:pointer;letter-spacing:.5px;';
+  document.getElementById('csPkgCuboid').style.cssText = base+(t==='cuboid'?on:off);
+  document.getElementById('csPkgCyl').style.cssText    = base+(t==='cylinder'?on:off);
+  document.getElementById('csCuboidIn').style.display = t==='cuboid' ? 'flex' : 'none';
+  document.getElementById('csCylIn').style.display    = t==='cylinder' ? 'flex' : 'none';
+  csGenerate();
+}
+
+function csFluteChange(silent){
+  const sel = document.getElementById('csFlute');
+  const inp = document.getElementById('csThick');
+  if(sel.value==='custom'){
+    inp.disabled = false;
+    if(!inp.value) inp.value = ST.isMetric ? 4 : 0.15625;
+  } else {
+    inp.disabled = true;
+    inp.value = dp(parseFloat(sel.value));  // preset values stored in inches
+  }
+  if(!silent) csGenerate();
+}
+
+// ── Configuration generation ────────────────────────────────────────────
+function csReadInputs(){
+  const g = id => parseFloat(document.getElementById(id).value) || 0;
+  const count = Math.max(0, Math.floor(g('csCount')));
+  const inp = {
+    count,
+    maxLayers: parseInt(document.getElementById('csMaxLayers').value,10) || 1,
+    style: document.getElementById('csStyle').value,
+    t: toIn(g('csThick')),
+    clr: toIn(g('csClr')),
+    unitWtLbs: ST.isMetric ? g('csUnitWt')/0.453592 : g('csUnitWt'),
+  };
+  if(CS.pkgType==='cylinder'){
+    inp.uL = toIn(g('csDia')); inp.uW = toIn(g('csDia')); inp.uH = toIn(g('csCylH'));
+    inp.valid = inp.uL>0 && inp.uH>0 && count>0;
+  } else {
+    inp.uL = toIn(g('csPL')); inp.uW = toIn(g('csPW')); inp.uH = toIn(g('csPH'));
+    inp.valid = inp.uL>0 && inp.uW>0 && inp.uH>0 && count>0;
+  }
+  return inp;
+}
+
+function csGenerate(){
+  CS.compared = false;
+  document.getElementById('csCompareWrap').style.display='none';
+  const box = document.getElementById('csResults');
+  const inp = csReadInputs();
+  if(!inp.valid){
+    CS.results=[];
+    document.getElementById('csCfgCount').textContent='';
+    box.innerHTML = '<span style="color:var(--dm);font-size:12px;">Enter primary package dimensions, unit weight, and a case count to generate configurations.</span>';
+    return;
+  }
+  const style = CS_STYLES[inp.style];
+  const seen = new Set();
+  const results = [];
+  for(let nz=1; nz<=inp.maxLayers; nz++){
+    if(inp.count % nz !== 0) continue;
+    const perLayer = inp.count / nz;
+    for(let a=1; a<=perLayer; a++){
+      if(perLayer % a !== 0) continue;
+      const b = perLayer / a;
+      // Orientations of the unit footprint within the case grid.
+      // Cylinder: footprint is square → one orientation, dedupe mirrored grids.
+      const orients = (CS.pkgType==='cylinder' || Math.abs(inp.uL-inp.uW)<1e-9)
+        ? [[inp.uL, inp.uW]]
+        : [[inp.uL, inp.uW],[inp.uW, inp.uL]];
+      for(const [dx,dy] of orients){
+        const idL = a*dx + inp.clr, idW = b*dy + inp.clr, idH = nz*inp.uH + inp.clr;
+        // Dedupe: case L/W labels are interchangeable at the pallet level
+        const key = [r2(Math.min(idL,idW)), r2(Math.max(idL,idW)), r2(idH)].join('|');
+        if(seen.has(key)) continue;
+        seen.add(key);
+        const od = style.od(idL, idW, idH, inp.t);
+        const blank = style.blankArea(od.L, od.W, od.H);            // sq in
+        const boardWt = blank/144 * csBoardLbPerFt2(inp.t);          // lbs
+        const caseWt = inp.count*inp.unitWtLbs + boardWt;            // lbs
+        results.push({
+          arr:`${a}×${b}×${nz}`, a, b, nz,
+          odL:r2(od.L), odW:r2(od.W), odH:r2(od.H),
+          boardWt:r2(boardWt), caseWt:r2(caseWt),
+          cube:r2(od.L*od.W*od.H/1728),                              // ft³
+          include:true,
+        });
+      }
+    }
+  }
+  // Sort: flattest aspect first is arbitrary — sort by footprint area then height
+  results.sort((p,q)=>(p.odL*p.odW)-(q.odL*q.odW) || p.odH-q.odH);
+  CS.results = results;
+  document.getElementById('csCfgCount').textContent = `— ${results.length} option${results.length===1?'':'s'} for count ${inp.count}`;
+
+  let html = `<table id="csCfgTbl" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">
+    <colgroup><col style="width:34px;"/><col style="width:104px;"/><col/><col style="width:96px;"/><col style="width:86px;"/><col style="width:76px;"/><col style="width:74px;"/></colgroup>
+    <thead><tr style="color:var(--go);font-size:10px;letter-spacing:1px;text-align:left;">
+      <th data-nosort style="padding:4px 6px;border-bottom:1px solid var(--bd);">✓</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">ARRANGEMENT<br><span style="color:var(--dm);font-weight:normal;">L×W×LAYERS</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CASE OD (${u()})<br><span style="color:var(--dm);font-weight:normal;">L×W×H</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CASE WT<br><span style="color:var(--dm);font-weight:normal;">incl. board</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">BOARD WT</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CUBE (ft³)</th>
+      <th data-nosort style="padding:4px 6px;border-bottom:1px solid var(--bd);"></th>
+    </tr></thead><tbody>`;
+  results.forEach((r,i)=>{
+    html += `<tr style="border-bottom:1px solid #2a2a2a;">
+      <td style="padding:4px 6px;"><input type="checkbox" checked onchange="CS.results[${i}].include=this.checked"/></td>
+      <td style="padding:4px 6px;color:#7ac8ff;" data-sv="${r.a*10000+r.b*100+r.nz}">${r.arr}</td>
+      <td style="padding:4px 6px;color:var(--tx);" data-sv="${r2(r.odL*r.odW*r.odH)}">${dp(r.odL)} × ${dp(r.odW)} × ${dp(r.odH)}</td>
+      <td style="padding:4px 6px;" data-sv="${r.caseWt}">${wtFmt(r.caseWt)}</td>
+      <td style="padding:4px 6px;color:var(--dm);" data-sv="${r.boardWt}">${wtFmt(r.boardWt)}</td>
+      <td style="padding:4px 6px;color:var(--dm);" data-sv="${r.cube}">${r.cube}</td>
+      <td style="padding:4px 6px;"><button onclick="csUse(${i},false)" title="Transfer this case to the pallet builder" style="background:#1a3520;color:#5ec97a;border:1px solid #2a4a2a;border-radius:3px;padding:2px 9px;font-size:11px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">USE →</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  box.innerHTML = html;
+  tblSetup('csCfg', document.getElementById('csCfgTbl'));
+}
+
+// ── Pallet-level comparison ─────────────────────────────────────────────
+function csRunCompare(){
+  const inp = csReadInputs();
+  if(!inp.valid || !CS.results.length){ csGenerate(); if(!CS.results.length) return; }
+  const palKey = document.getElementById('csPallet').value;
+  const pal = PALLETS[palKey], pW = pal.w, pL = pal.l, pH = pal.h;
+  const rawMaxH = parseFloat(ST.maxH);
+  const hasMaxH = ST.maxH!=='' && ST.maxH!==undefined && ST.maxH!==null && rawMaxH>0 && isFinite(rawMaxH);
+  const trailerH = (typeof TRK!=='undefined' && TRK && TRK.dims) ? TRK.dims.H : 110;
+  const effH = hasMaxH ? cv(ST.maxH) : trailerH;
+
+  const rows = [];
+  CS.results.forEach((r,i)=>{
+    if(!r.include) return;
+    let TI=0, eff=0, patName='—';
+    try{
+      const pats = buildPatterns(r.odW, r.odL, pW, pL);
+      if(pats && pats.length){ TI=pats[0].TI; eff=pats[0].cubicEff; patName=pats[0].name; }
+    }catch(e){ console.error('[csRunCompare]', e); }
+    const layers = r.odH>0 ? Math.max(0, Math.floor((effH - pH)/r.odH)) : 0;
+    const casesPal = TI*layers;
+    const unitsPal = casesPal*inp.count;
+    rows.push({
+      i, arr:r.arr, odL:r.odL, odW:r.odW, odH:r.odH,
+      TI, layers, casesPal, unitsPal, patName,
+      eff: eff||0,
+      loadH: r2(pH + layers*r.odH),
+      loadWt: r2(casesPal*r.caseWt + pal.tare),
+      fits: TI>0 && layers>0,
+    });
+  });
+  rows.sort((p,q)=> q.unitsPal - p.unitsPal || p.loadWt - q.loadWt);
+  const best = rows.length && rows[0].fits ? rows[0].unitsPal : -1;
+
+  document.getElementById('csCmpPal').textContent =
+    `— ${pal.label} · max height ${dp(effH)}${u()}${hasMaxH?'':' (trailer)'}`;
+
+  let html = `<table id="csCmpTbl" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">
+    <colgroup><col style="width:96px;"/><col/><col style="width:58px;"/><col style="width:58px;"/><col style="width:60px;"/><col style="width:76px;"/><col style="width:64px;"/><col style="width:70px;"/><col style="width:80px;"/><col style="width:70px;"/></colgroup>
+    <thead><tr style="color:var(--go);font-size:10px;letter-spacing:1px;text-align:left;">
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">ARRANGEMENT</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CASE OD (${u()})</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CASES<br><span style="color:var(--dm);font-weight:normal;">/LAYER</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">LAYERS</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">CASES<br><span style="color:var(--dm);font-weight:normal;">/PALLET</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">UNITS<br><span style="color:var(--dm);font-weight:normal;">/PALLET</span></th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">AREA EFF</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">LOAD H (${u()})</th>
+      <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">LOAD WT</th>
+      <th data-nosort style="padding:4px 6px;border-bottom:1px solid var(--bd);"></th>
+    </tr></thead><tbody>`;
+  rows.forEach(w=>{
+    const isBest = w.fits && w.unitsPal===best;
+    html += `<tr style="border-bottom:1px solid #2a2a2a;${isBest?'background:rgba(94,201,122,.08);':''}${!w.fits?'opacity:.45;':''}">
+      <td style="padding:4px 6px;color:#7ac8ff;">${w.arr}${isBest?' <span style="color:#5ec97a;font-size:10px;">★ BEST</span>':''}</td>
+      <td style="padding:4px 6px;" data-sv="${r2(w.odL*w.odW*w.odH)}">${dp(w.odL)} × ${dp(w.odW)} × ${dp(w.odH)}</td>
+      <td style="padding:4px 6px;" data-sv="${w.fits?w.TI:-1}">${w.fits?w.TI:'—'}</td>
+      <td style="padding:4px 6px;" data-sv="${w.fits?w.layers:-1}">${w.fits?w.layers:'—'}</td>
+      <td style="padding:4px 6px;" data-sv="${w.fits?w.casesPal:-1}">${w.fits?w.casesPal:'—'}</td>
+      <td style="padding:4px 6px;color:${isBest?'#5ec97a':'var(--tx)'};font-weight:bold;" data-sv="${w.fits?w.unitsPal:-1}">${w.fits?w.unitsPal:'DOES NOT FIT'}</td>
+      <td style="padding:4px 6px;color:var(--dm);" data-sv="${w.fits?w.eff:-1}">${w.fits?w.eff+'%':'—'}</td>
+      <td style="padding:4px 6px;color:var(--dm);" data-sv="${w.fits?w.loadH:-1}">${w.fits?dp(w.loadH):'—'}</td>
+      <td style="padding:4px 6px;color:var(--dm);" data-sv="${w.fits?w.loadWt:-1}">${w.fits?wtFmt(w.loadWt):'—'}</td>
+      <td style="padding:4px 6px;">${w.fits?`<button onclick="csUse(${w.i},true)" title="Transfer this case + pallet size to the builder" style="background:#1a3520;color:#5ec97a;border:1px solid #2a4a2a;border-radius:3px;padding:2px 9px;font-size:11px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">USE →</button>`:''}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>
+  <div style="font-size:10px;color:var(--dm);margin-top:6px;line-height:1.5;">
+    Units/pallet = case count × cases/pallet. Layers limited by ${hasMaxH?'your Max Height input':'trailer interior height'}.
+    Load weight includes est. corrugate + pallet tare. Click a column header to sort · drag header edges to resize.
+  </div>`;
+  document.getElementById('csCompare').innerHTML = html;
+  tblSetup('csCmp', document.getElementById('csCmpTbl'));
+  document.getElementById('csCompareWrap').style.display = 'block';
+  CS.compared = true;
+}
+
+// ── Transfer to builder ─────────────────────────────────────────────────
+function csUse(idx, withPallet){
+  const r = CS.results[idx];
+  if(!r) return;
+  if(withPallet){
+    const palKey = document.getElementById('csPallet').value;
+    if(palKey && PALLETS[palKey]) { ST.palletKey = palKey; renderPalletBtns(); }
+  }
+  // Target case: active layer-editor case, else first
+  let c = ST.cases.find(x=>typeof LE!=='undefined' && x.id===LE._activeCaseId) || ST.cases[0];
+  c.l  = dp(r.odL);
+  c.w  = dp(r.odW);
+  c.h  = dp(r.odH);
+  c.wt = ST.isMetric ? r2(r.caseWt*0.453592) : r2(r.caseWt);
+  renderCaseList();
+  if(typeof leRenderCasePalette==='function') leRenderCasePalette();
+  csClose();
+  _autoCalculate(50);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SORTABLE / RESIZABLE TABLE COLUMNS
+// Shared module used by the pallet pattern table (2D / 3D / Truck views)
+// and both Case Size calculator tables. Click a header to sort (toggles
+// asc/desc); drag a header's right edge to resize the column. Sort order
+// and column widths persist for the session and survive re-renders.
+// Sorting reorders <tr> DOM nodes only — inline handlers keep their
+// original indices, so row clicks / checkboxes / USE buttons stay correct.
+// ═══════════════════════════════════════════════════════════════════════
+const TBL = { _states:{}, _justResized:false };
+
+function tblState(key){
+  return TBL._states[key] || (TBL._states[key] = {sortCol:-1, sortDir:1, widths:{}});
+}
+
+// Cell sort value: data-sv attribute wins; else numeric parse of text; else text
+function tblCellVal(tr, ci){
+  const td = tr.cells[ci];
+  if(!td) return '';
+  if(td.dataset && td.dataset.sv !== undefined){
+    const n = parseFloat(td.dataset.sv);
+    return isNaN(n) ? td.dataset.sv : n;
+  }
+  const txt = (td.textContent||'').trim();
+  const n = parseFloat(txt.replace(/[^0-9.\-]+/g, ' '));
+  return isNaN(n) ? txt.toLowerCase() : n;
+}
+
+function tblSort(key, tableEl){
+  const st = tblState(key);
+  if(st.sortCol < 0) return;
+  const tb = tableEl.tBodies[0];
+  if(!tb) return;
+  const rows = Array.from(tb.rows);
+  const ci = st.sortCol, dir = st.sortDir;
+  rows.sort((r1, r2)=>{
+    const a = tblCellVal(r1, ci), b = tblCellVal(r2, ci);
+    if(typeof a === 'number' && typeof b === 'number') return (a - b) * dir;
+    if(typeof a === 'number') return -1;         // non-numeric always sinks
+    if(typeof b === 'number') return  1;
+    return String(a).localeCompare(String(b)) * dir;
+  });
+  rows.forEach(r => tb.appendChild(r));
+}
+
+// Idempotent per re-render: call after (re)building a table's header + body.
+function tblSetup(key, tableEl){
+  if(!tableEl) return;
+  const st  = tblState(key);
+  const hdr = tableEl.tHead ? tableEl.tHead.rows[0] : tableEl.rows[0];
+  if(!hdr) return;
+  const nCols = hdr.cells.length;
+
+  // Ensure a colgroup exists so widths apply per-column under table-layout:fixed
+  let cg = tableEl.querySelector('colgroup');
+  if(!cg){
+    cg = document.createElement('colgroup');
+    for(let i=0;i<nCols;i++) cg.appendChild(document.createElement('col'));
+    tableEl.insertBefore(cg, tableEl.firstChild);
+  }
+
+  const refreshInds = ()=>{
+    Array.from(hdr.cells).forEach((th,i)=>{
+      const old = th.querySelector('.tblInd');
+      if(old) old.remove();
+      if(st.sortCol === i){
+        const ind = document.createElement('span');
+        ind.className = 'tblInd';
+        ind.textContent = st.sortDir === 1 ? ' ▲' : ' ▼';
+        ind.style.cssText = 'color:var(--go);font-size:9px;';
+        th.appendChild(ind);
+      }
+    });
+  };
+
+  Array.from(hdr.cells).forEach((th, ci)=>{
+    if(th._tblWired) return;           // guard if setup runs twice on same nodes
+    th._tblWired = true;
+    th.style.position = 'relative';
+    th.style.userSelect = 'none';
+    const noSort = th.dataset && th.dataset.nosort !== undefined;
+    if(!noSort){
+      th.style.cursor = 'pointer';
+      if(!th.title) th.title = 'Click to sort · drag right edge to resize';
+      th.addEventListener('click', ()=>{
+        if(TBL._justResized) return;   // a resize drag just ended — not a sort
+        if(st.sortCol === ci){ st.sortDir = -st.sortDir; }
+        else { st.sortCol = ci; st.sortDir = 1; }
+        tblSort(key, tableEl);
+        refreshInds();
+      });
+    } else if(!th.title){
+      th.title = 'Drag right edge to resize';
+    }
+    // Resize grip
+    const grip = document.createElement('div');
+    grip.style.cssText = 'position:absolute;top:0;right:-4px;width:9px;height:100%;cursor:col-resize;z-index:5;';
+    grip.addEventListener('click', e=>e.stopPropagation());
+    grip.addEventListener('mousedown', e=>{
+      e.preventDefault(); e.stopPropagation();
+      const startX = e.clientX;
+      const startW = th.getBoundingClientRect().width;
+      const col = cg.children[ci];
+      const move = ev=>{
+        const w = Math.max(28, Math.round(startW + (ev.clientX - startX)));
+        if(col) col.style.width = w + 'px';
+        st.widths[ci] = w;
+        TBL._justResized = true;
+      };
+      const up = ()=>{
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        setTimeout(()=>{ TBL._justResized = false; }, 60);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    th.appendChild(grip);
+    // Re-apply persisted width for this column
+    if(st.widths[ci] && cg.children[ci]) cg.children[ci].style.width = st.widths[ci] + 'px';
+  });
+
+  refreshInds();
+  tblSort(key, tableEl);               // re-apply persisted sort after re-render
+}
+
+// Hook the main pallet pattern table (visible in 2D / 3D / Truck views):
+// wrap renderTable so sorting/resizing is re-attached after every rebuild.
+const _tblOrigRenderTable = renderTable;
+renderTable = function(){
+  _tblOrigRenderTable.apply(this, arguments);
+  try{ tblSetup('pat', document.querySelector('#tw table')); }catch(e){ console.error('[tblSetup pat]', e); }
+};
 </script>
 </body>
 </html>
