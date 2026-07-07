@@ -1268,9 +1268,14 @@ function _bpCore(cW, cL, pW, pL){
   // reach these edges when its case count allows.
   const targetW=maxW;
   const targetL=maxL;
-  // Cases distribute with small, even gaps (not spread to the perimeter); any
-  // remaining space becomes a centered margin, the way real pallets are stacked.
-  const MAXGAP=2;
+  // TIGHT PACKING: cases are placed flush against each other — no scattered
+  // interior gaps. All leftover space consolidates into centered outer margins
+  // (or the single purposeful zone gap in mixed-orientation layouts), so every
+  // pattern can be built by hand exactly as drawn. MAXGAP=0 means the
+  // distribution passes pack tight instead of inserting per-case gaps.
+  const MAXGAP=0;
+  const DEDUP_TOL=1;   // positional tolerance when matching turned/mirrored duplicates
+  const SNAP_TOL=2;    // cases misaligned by <= this snap to their neighbors' row/column line
 
   // ── Utilities ────────────────────────────────────────────────────
   const rot180=pls=>pls.map(p=>({...p,x:rp(pW-p.x-p.w),y:rp(pL-p.y-p.l)}));
@@ -1520,19 +1525,19 @@ function _bpCore(cW, cL, pW, pL){
   const _msKey=a=>a.map(p=>Math.min(p.w,p.l)+'-'+Math.max(p.w,p.l)).sort().join('|')+'#'+a.length;
   const _norm=a=>{const mx=Math.min(...a.map(p=>p.x)),my=Math.min(...a.map(p=>p.y));
     return a.map(p=>({x:p.x-mx,y:p.y-my,w:p.w,l:p.l}));};
-  const _closeMatch=(A,B)=>{ // A,B normalised; true if a same-size bijection exists within MAXGAP
+  const _closeMatch=(A,B)=>{ // A,B normalised; true if a same-size bijection exists within DEDUP_TOL
     if(A.length!==B.length) return false;
     const used=new Array(B.length).fill(false);
     for(const pa of A){ let best=-1,bd=Infinity;
       for(let j=0;j<B.length;j++){ if(used[j]||B[j].w!==pa.w||B[j].l!==pa.l) continue;
         const d=Math.abs(B[j].x-pa.x)+Math.abs(B[j].y-pa.y); if(d<bd){bd=d;best=j;} }
-      if(best<0||bd>MAXGAP+EPS) return false; used[best]=true; }
+      if(best<0||bd>DEDUP_TOL+EPS) return false; used[best]=true; }
     return true;
   };
 
   // Distribute every column of cases vertically within the space available to
   // it (bounded by the surrounding cases and the pallet edges), so cases flush
-  // the perimeter with even interior gaps instead of clustering to one end.
+  // tight-packed (MAXGAP=0) and centered instead of clustering to one end.
   // This runs identically at every edge offset (offset patterns are built on a
   // resized pallet), so 0", positive, and negative all distribute the same way.
   const distributeFills=(pls,pW,pL)=>{
@@ -1599,6 +1604,110 @@ function _bpCore(cW, cL, pW, pL){
     return out;
   };
 
+  // ── ALIGNMENT SNAP ──────────────────────────────────────────────
+  // Kills the "one case randomly dropped an inch below its row" artifact.
+  // Cases with the SAME length whose y-starts differ by <= SNAP_TOL are
+  // snapped onto a common row line (the y shared by the most cases in the
+  // cluster); same for x-starts of same-width cases (column lines). Genuinely
+  // purposeful offsets (brick stagger = half a case) are far larger than
+  // SNAP_TOL and untouched. Each cluster's snap is validated INDIVIDUALLY —
+  // a snap that would create an overlap or breach the perimeter is reverted
+  // without discarding the other clusters' fixes.
+  const alignSnap=(pls)=>{
+    if(pls.length<3||pls.length>250) return pls;
+    let cur=pls.map(p=>({...p}));
+    const snapAxis=(posKey,sizeKey)=>{
+      const groups=new Map();  // same-size cases grouped, then clustered by coord
+      cur.forEach((p,i)=>{
+        const sk=Math.round(p[sizeKey]*100);
+        if(!groups.has(sk)) groups.set(sk,[]);
+        groups.get(sk).push({i, v:p[posKey]});
+      });
+      groups.forEach(list=>{
+        if(list.length<2) return;
+        list.sort((a,b)=>a.v-b.v);
+        let cl=[list[0]];
+        const flush=()=>{
+          if(cl.length>=2){
+            // dominant coordinate = value shared by the most members (2-decimal bins)
+            const freq=new Map();
+            cl.forEach(o=>{const k=Math.round(o.v*100);freq.set(k,(freq.get(k)||0)+1);});
+            let bestK=null,bestN=-1;
+            freq.forEach((n,k)=>{ if(n>bestN||(n===bestN&&(bestK===null||k<bestK))){bestN=n;bestK=k;} });
+            const target=bestK/100;
+            const trial=cur.map(p=>({...p}));
+            let changed=false;
+            cl.forEach(o=>{
+              if(Math.abs(trial[o.i][posKey]-target)>EPS){ trial[o.i][posKey]=rp(target); changed=true; }
+            });
+            if(changed && validate(trial)) cur=trial;  // accept/reject THIS cluster only
+          }
+          cl=[];
+        };
+        for(let i=1;i<list.length;i++){
+          if(list[i].v-cl[0].v<=SNAP_TOL+EPS) cl.push(list[i]);
+          else { flush(); cl=[list[i]]; }
+        }
+        flush();
+      });
+    };
+    snapAxis('y','l');   // row alignment (same-length cases)
+    snapAxis('x','w');   // column alignment (same-width cases)
+    return cur;
+  };
+
+  // ── SCATTER METRIC ──────────────────────────────────────────────
+  // Counts distinct interior gap "seams" in a layout. A single consolidated
+  // seam (e.g. the center void of a classical block pattern) is purposeful;
+  // many small gaps sprinkled between cases are scatter — they add nothing,
+  // let cases walk in transit, and make the pattern impractical to build by
+  // hand. One seam crossing several rows is merged and counted ONCE (deduped
+  // by its center position), so block patterns aren't over-penalised.
+  const scatterCount=(pls)=>{
+    if(pls.length<2) return 0;
+    const seams=new Set();
+    const scan=(posKey,sizeKey,ortKey,tag)=>{
+      const bands=new Map();
+      pls.forEach(p=>{const k=Math.round(p[ortKey]*10)/10;if(!bands.has(k))bands.set(k,[]);bands.get(k).push(p);});
+      bands.forEach(b=>{
+        const s=[...b].sort((a,q)=>a[posKey]-q[posKey]);
+        for(let i=1;i<s.length;i++){
+          const g=s[i][posKey]-(s[i-1][posKey]+s[i-1][sizeKey]);
+          if(g>0.25){
+            const c=s[i-1][posKey]+s[i-1][sizeKey]+g/2;
+            seams.add(tag+(Math.round(c*2)/2));   // merge seams sharing a center line
+          }
+        }
+      });
+    };
+    scan('x','w','y','x');   // gaps along rows (bands grouped by y)
+    scan('y','l','x','y');   // gaps along columns (bands grouped by x)
+    // Residual misalignment also counts as scatter: same-size cases whose
+    // row/column lines differ by 0.25"–SNAP_TOL (offsets the snap pass could
+    // not resolve without creating an overlap). Each unresolved cluster of
+    // distinct lines adds one scatter unit.
+    const misScan=(posKey,sizeKey,tag)=>{
+      const groups=new Map();
+      pls.forEach(p=>{const k=Math.round(p[sizeKey]*100);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p[posKey]);});
+      groups.forEach(vals=>{
+        if(vals.length<2) return;
+        vals.sort((a,b)=>a-b);
+        let seed=vals[0], lines=new Set([Math.round(vals[0]*4)]);   // quarter-inch bins: <0.25" offsets don't count
+        for(let i=1;i<vals.length;i++){
+          if(vals[i]-seed<=SNAP_TOL+EPS){ lines.add(Math.round(vals[i]*4)); }
+          else {
+            if(lines.size>1) seams.add(tag+'m'+seed);
+            seed=vals[i]; lines=new Set([Math.round(vals[i]*4)]);
+          }
+        }
+        if(lines.size>1) seams.add(tag+'m'+seed);
+      });
+    };
+    misScan('y','l','x');
+    misScan('x','w','y');
+    return seams.size;
+  };
+
   const addPat=(name,desc,rawPls,skipBillboard)=>{
     if(!rawPls||rawPls.length<1) return;
     const ohl=ohIn+EPS;
@@ -1609,7 +1718,7 @@ function _bpCore(cW, cL, pW, pL){
     // column stacks) — stay tight and centered. Spreading them would only
     // insert a gap between every case (the "spread grid" look we don't want).
     // Only mixed-orientation patterns get distributed, so their fill cases can
-    // flush the perimeter and even out the leftover space.
+    // pack tight and centered, consolidating leftover space into clean margins.
     const uniform=pls.every(p=>p.w===pls[0].w&&p.l===pls[0].l);
     if(!skipBillboard && !uniform && pls.length<=250){
       // Best-effort billboard: pls is already valid here. If spreading
@@ -1619,11 +1728,18 @@ function _bpCore(cW, cL, pW, pL){
       const spread=recentre(billboardToTargets(pls));
       if(validate(spread)) pls=spread;
 
+      // Align rows/columns BEFORE distribution so the exact-y/exact-x band
+      // grouping inside the distribution passes catches every case.
+      pls=alignSnap(pls);
+
       const dist=distributeFills(pls,pW,pL);
       if(validate(dist)) pls=dist;
 
       const distX=distributeFillsX(pls,pW,pL);
       if(validate(distX)) pls=recentre(distX);
+
+      // Final tidy: snap any case distribution nudged off its row/column line.
+      pls=recentre(alignSnap(pls));
     }
     if(!validate(pls)) return;
     const TI=pls.length; if(TI<1) return;
@@ -1633,7 +1749,7 @@ function _bpCore(cW, cL, pW, pL){
     if(seenFP.has(k)||seenFP.has(kr)) return;
     // Tolerant turn/mirror dedup — drop a pattern that is the same as one
     // already accepted once the pallet is turned 180° or mirrored left-right
-    // or top-bottom (allowing for gap-distribution jitter up to MAXGAP).
+    // or top-bottom (allowing positional jitter up to DEDUP_TOL).
     // flipX∘flipY == rot180, so these three cover the pallet's full symmetry.
     // Skipped for very large layers (O(n²) per comparison) — the exact
     // fingerprint dedup above still catches identical and rot-180 twins.
@@ -1661,14 +1777,16 @@ function _bpCore(cW, cL, pW, pL){
     const ilq=interlockQuality(pls,plsB);
     const stab=newStability(ilq,supp.avg,cen,ohW,ohL,_gapFracOf(pls));
     const il=r2(overlapRatio(pls,plsB)*100);
+    const scat=scatterCount(pls);
     PATS.push({
       name,desc:desc||name,orientDesc:'',
       placements:pls,placementsB:plsB,
       count:TI,TI,TI_B:TI,ohW,ohL,cubicEff:ce,palUtilPct:ce,
       caseSupportPct:supp.avg,minCaseSupport:supp.min,stability:stab,interlockPct:il,
       orisA:'',orisB:'',zoneW:pW,zoneL:pL,ohIn,
-      wdA:cen,wdB:cen,masterW:r2(pW),masterL:r2(pL),_score:scorePattern(pls),
-      _maxGap:maxInternalGap(pls),_ilq:ilq,
+      wdA:cen,wdB:cen,masterW:r2(pW),masterL:r2(pL),
+      _score:scorePattern(pls)-scat*100,   // tidy patterns outrank scattered ones at equal TI
+      _maxGap:maxInternalGap(pls),_ilq:ilq,_scatter:scat,
     });
   };
 
@@ -2647,10 +2765,11 @@ function _bpCore(cW, cL, pW, pL){
   // actually ship. Fallback: if a case/pallet combination leaves fewer
   // than 3 tight patterns, keep the least-gappy ones so the list is
   // never empty.
-  const GATE=Math.min(MAX_GAP_OK, MAXGAP*1.5); // interlock-breaking gap, or 1.5× the engine's own intentional gap cap — whichever is stricter
-  const _tight=filtered.filter(p=>(p._maxGap||0)<=GATE+EPS);
+  const GATE=MAX_GAP_OK; // interlock-breaking gap threshold (50% of smallest case dimension); with tight packing (MAXGAP=0) any remaining gap is structural, so this alone decides shippability
+  const MAX_SCATTER=2;   // at most 2 distinct interior seams — a purposeful block/zone void is fine; sprinkled random gaps are not
+  const _tight=filtered.filter(p=>(p._maxGap||0)<=GATE+EPS && (p._scatter||0)<=MAX_SCATTER);
   const usable=_tight.length>=3 ? _tight
-    : filtered.slice().sort((a,b)=>(a._maxGap||0)-(b._maxGap||0))
+    : filtered.slice().sort((a,b)=>((a._scatter||0)-(b._scatter||0)) || ((a._maxGap||0)-(b._maxGap||0)))
         .slice(0,Math.min(filtered.length,3));
   usable.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
   // Cap lowered from 120: a shorter list of shippable patterns beats a
