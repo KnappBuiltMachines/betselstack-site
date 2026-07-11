@@ -3,8 +3,8 @@
 // Replaces the ENTIRE contents of app/software/page.js.
 //
 // BEFORE THIS WORKS:
-//   1. Upload pallet-demo.mp4 into your /public folder (it must live at
-//      /pallet-demo.mp4). The <video> below points at that path.
+//   1. The demo video lives at /public/betsel-software-tour.mp4 with poster
+//      /public/betsel-software-tour-poster.jpg. The <video> below points there.
 //   2. Your existing screenshots stay where they are (/screenshots/*.jpg).
 //
 // NAV + FOOTER: this file is just the page body. Your site nav and footer come
@@ -180,7 +180,7 @@ export default function SoftwarePage() {
               <h2>The whole workflow, start to finish</h2>
               <p>
                 Watch a real pallet get built, checked in 3D, loaded into a trailer, and
-                exported as a report — about 90 seconds, no narration needed.
+                exported as a report — press play for the full guided tour.
               </p>
             </div>
             <div className="monitor">
@@ -189,11 +189,10 @@ export default function SoftwarePage() {
                 <span className="title">PALLET PATTERN BUILDER — LIVE SESSION</span>
               </div>
               <video
-                src="/pallet-demo.mp4"
-                poster="/screenshots/builder.jpg"
-                autoPlay
-                loop
-                muted
+                src="/betsel-software-tour.mp4"
+                poster="/betsel-software-tour-poster.jpg"
+                controls
+                preload="metadata"
                 playsInline
               />
             </div>
