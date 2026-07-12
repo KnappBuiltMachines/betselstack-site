@@ -180,6 +180,8 @@ table colgroup col:nth-child(8){width:82px;}
 table colgroup col:nth-child(9){width:64px;}
 table colgroup col:nth-child(10){width:64px;}
 th{color:var(--dm);padding:4px 5px;text-align:left;letter-spacing:1px;font-weight:bold;font-size:11px;border-bottom:2px solid var(--bd);white-space:nowrap;overflow:hidden;}
+/* Frozen header — column labels stay visible while the pattern list scrolls */
+#tw thead th{position:sticky;top:-6px;z-index:20;background:var(--pn);box-shadow:0 2px 0 var(--bd);}
 td{padding:4px 5px;border-bottom:1px solid #383838;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;}
 tr.selr td{background:rgba(245,166,35,.10);border-left:2px solid var(--go);}
 tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
@@ -488,6 +490,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
     </div>
     <span id="selName" style="font-size:13px;color:var(--go);letter-spacing:1px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     <span id="h3d" style="display:none;font-size:12px;color:var(--dm);">Drag·rotate · Scroll·zoom</span>
+    <!-- Tight packing toggle — single-case, pattern views -->
+    <button id="tightBtn" onclick="toggleTightMode()" style="display:none;background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:3px;padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;white-space:nowrap;" title="ON: pack cases tight to the pallet center with minimal gaps. OFF: distribute cases evenly out to the allowed perimeter with equal gaps between cases">▣ TIGHT OFF</button>
     <!-- Interlock toggle — single-case 2D view only -->
     <button id="interlockBtn" onclick="toggleInterlockMode()" style="display:none;background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:3px;padding:3px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;white-space:nowrap;" title="Alternate every other layer 180° for interlocking stability">🔄 INTERLOCK OFF</button>
     <!-- 3D dimension toggle — only visible in 3D view -->
@@ -706,6 +710,7 @@ const COLORS=['#3A7BD5','#27AE60','#E67E22','#C0392B','#8E44AD','#16A085','#D354
               '#2E86C1','#1D8348','#D4AC0D','#7D3C98','#1F618D','#196F3D','#9A7D0A','#6E2F8E'];
 let ST={
   isMetric:false, palletKey:'full', maxH:'', maxOverhang:'',
+  tightMode:false,   // false = spread cases to perimeter (even gaps); true = pack tight to center
   cases:[{id:1,w:'',l:'',h:'',wt:'',color:COLORS[0],label:'Case A'}],
   layerStack:[],   // [{layerIdx, patternIdx, degree}] — per-layer overrides
   interlockMode: false,  // single-case: alternate layers 180°
@@ -1183,6 +1188,160 @@ function newStability(interlock, supportPct, centeringPct, ovW, ovL, gapFrac){
   return r2(Math.max(0, Math.min(100, (interlockPts + supportPts + centeringPts + overhangPts - gapPen) * 100)));
 }
 
+// ═══════════════════════════════════════════════════════════════
+// TIGHT / SPREAD DISTRIBUTION TRANSFORM
+// Patterns are always GENERATED with the same canonical geometry; that is
+// what the search, dedup, and ranking all operate on, so the pattern list
+// is IDENTICAL whether the TIGHT toggle is on or off. This transform then
+// repositions each finished layer in BOTH axes:
+//   TIGHT ON  — every row's cases squeeze to touching (gap 0) with the
+//     block centered, and the rows squeeze together vertically, also
+//     centered: interior gaps close in both the length and width
+//     directions, leaving all slack as outer margins.
+//   TIGHT OFF — every row spreads across the FULL allowed width (first
+//     case flush left, last flush right, equal gaps), and the rows spread
+//     across the FULL allowed depth the same way.
+//   Layouts where a tall case welds all rows into one rigid strip fall
+//     back to per-COLUMN vertical distribution so both directions still
+//     respond to the toggle.
+//   The result stays symmetric about the pallet center (COG centered).
+// Every pass is validated against the whole layer and reverted band-by-band
+// if it would ever create an overlap, so the transform is always safe.
+function _distributeLayer(pls, pW, pL, tight){
+  if(!pls || !pls.length) return null;
+  const _OH=(ST.maxOverhang===''||ST.maxOverhang===null||ST.maxOverhang===undefined)?0:parseFloat(ST.maxOverhang)||0;
+  const ohIn=ST.isMetric?_OH/25.4:_OH;
+  const xLo=-ohIn, xHi=pW+ohIn, yLo=-ohIn, yHi=pL+ohIn;
+  const targetW=xHi-xLo, targetL=yHi-yLo;
+  if(targetW<=0||targetL<=0) return null;
+  const rr=v=>Math.round(v*1e4)/1e4;
+  const out=pls.map(p=>({...p}));
+
+  // Bounds + overlap validation over the whole layer
+  const ok=arr=>{
+    for(const p of arr) if(p.x<xLo-0.02||p.y<yLo-0.02||p.x+p.w>xHi+0.02||p.y+p.l>yHi+0.02) return false;
+    if(arr.length>250) return true;
+    for(let i=0;i<arr.length;i++){const a=arr[i];
+      for(let j=i+1;j<arr.length;j++){const b=arr[j];
+        if(a.x+a.w-1e-4>b.x&&b.x+b.w-1e-4>a.x&&a.y+a.l-1e-4>b.y&&b.y+b.l-1e-4>a.y) return false;
+      }
+    }
+    return true;
+  };
+  if(!ok(out)) return null;
+
+  // Position a run of cases along one axis:
+  //   tight  → cases touching (gap 0), block centered in the corridor
+  //   spread → first flush at lo, last flush at hi, equal gaps between
+  // sizes: case extents along the axis; returns array of positions.
+  const runPositions=(sizes, lo, span)=>{
+    const total=sizes.reduce((a,b)=>a+b,0), n=sizes.length;
+    let gap, x;
+    if(tight || total>=span-0.02 || n===1){
+      gap=0; x=lo+(span-total)/2;
+    } else {
+      gap=(span-total)/(n-1); x=lo;
+    }
+    const posArr=[];
+    sizes.forEach(sz=>{ posArr.push(rr(x)); x+=sz+gap; });
+    return posArr;
+  };
+
+  // ── 1. Cluster cases into horizontal bands (rows) by y-start ─────
+  const TOL=0.6;
+  const byY=[...out].sort((a,b)=>a.y-b.y||a.x-b.x);
+  const bands=[];
+  byY.forEach(p=>{
+    const b=bands.length?bands[bands.length-1]:null;
+    if(b && p.y-b.y0<=TOL){ b.cases.push(p); }
+    else bands.push({y0:p.y, cases:[p]});
+  });
+
+  // ── 2. ROW PASS (x direction) ─────────────────────────────────────
+  // TIGHT: each row's cases squeeze together, block centered.
+  // SPREAD: each row spans the full allowed width with equal gaps.
+  // Each band is validated against the whole layer and reverted
+  // individually (protects layouts where a tall case spans bands).
+  bands.forEach(b=>{
+    const s=b.cases.sort((a,c)=>a.x-c.x);
+    const orig=s.map(p=>p.x);
+    const xs=runPositions(s.map(p=>p.w), xLo, targetW);
+    s.forEach((p,i)=>{p.x=xs[i];});
+    if(!ok(out)) s.forEach((p,i)=>{p.x=orig[i];});
+  });
+
+  // ── 3. BAND PASS (y direction) ────────────────────────────────────
+  // Bands whose y-ranges overlap merge into one rigid strip (keeps
+  // column-spanning cases intact). TIGHT: strips squeeze to touching,
+  // centered. SPREAD: strips span the full depth with equal gaps.
+  let strips=bands.map(b=>({
+    y0:Math.min(...b.cases.map(p=>p.y)),
+    y1:Math.max(...b.cases.map(p=>p.y+p.l)),
+    cases:[...b.cases]}));
+  strips.sort((a,b)=>a.y0-b.y0);
+  const merged=[];
+  strips.forEach(s=>{
+    const m=merged.length?merged[merged.length-1]:null;
+    if(m && s.y0<m.y1-0.02){ m.cases.push(...s.cases); m.y1=Math.max(m.y1,s.y1); }
+    else merged.push({y0:s.y0,y1:s.y1,cases:[...s.cases]});
+  });
+  const m=merged.length;
+  if(m>1 || bands.length===1){
+    const origY=merged.map(s=>s.cases.map(p=>p.y));
+    const ys=runPositions(merged.map(s=>s.y1-s.y0), yLo, targetL);
+    merged.forEach((s,si)=>{
+      const shift=ys[si]-s.y0;
+      s.cases.forEach(p=>{p.y=rr(p.y+shift);});
+    });
+    if(!ok(out)) merged.forEach((s,si)=>s.cases.forEach((p,pi)=>{p.y=origY[si][pi];}));
+  } else {
+    // ── COLUMN FALLBACK ─────────────────────────────────────────────
+    // Everything merged into ONE rigid strip (a tall case welds the rows
+    // together — e.g. "4X-col Left"). Rigid strips can't open or close
+    // interior vertical gaps, so distribute per COLUMN instead: cases
+    // sharing an x-start line squeeze/spread vertically inside the full
+    // corridor, each column validated and reverted independently.
+    const cols=new Map();
+    out.forEach(p=>{const k=Math.round(p.x*10)/10;if(!cols.has(k))cols.set(k,[]);cols.get(k).push(p);});
+    cols.forEach(colArr=>{
+      const s=colArr.sort((a,b)=>a.y-b.y);
+      const orig=s.map(p=>p.y);
+      const ys=runPositions(s.map(p=>p.l), yLo, targetL);
+      s.forEach((p,i)=>{p.y=ys[i];});
+      if(!ok(out)) s.forEach((p,i)=>{p.y=orig[i];});
+    });
+  }
+
+  return ok(out)?out:null;
+}
+
+// Apply the TIGHT/SPREAD distribution to one pattern object and refresh its
+// geometry-dependent metrics (support, stability, interlock, overhang).
+// Cubic efficiency is footprint-based and unchanged. Saved/manual patterns
+// are left untouched.
+function _distributePattern(p, pW, pL){
+  if(!p||!p.placements||!p.placements.length||p.multiCaseManual||p.saved) return p;
+  const pls=_distributeLayer(p.placements,pW,pL,!!ST.tightMode);
+  if(!pls) return p;
+  // Alternate layer = the same spread layer turned 180° about the pallet
+  // center (mirrors how the generator builds placementsB).
+  const hadAlt=!!p.placementsB;
+  const sameRef=p.placementsB===p.placements;
+  const plsB=!hadAlt?null:(sameRef?pls:pls.map(q=>({...q,x:r2(pW-q.x-q.w),y:r2(pL-q.y-q.l)})));
+  const mnX=Math.min(...pls.map(q=>q.x)),mxX=Math.max(...pls.map(q=>q.x+q.w));
+  const mnY=Math.min(...pls.map(q=>q.y)),mxY=Math.max(...pls.map(q=>q.y+q.l));
+  const _oxW=r2(((mxX-mnX)-pW)/2),_oxL=r2(((mxY-mnY)-pL)/2);
+  const ohW=(pW<=pL)?_oxW:_oxL, ohL=(pW<=pL)?_oxL:_oxW;
+  const supp=caseSupportPct(pls,pW,pL,0,1,plsB||pls);
+  const cen=weightDistScore(pls,pW,pL);
+  const ilq=(plsB&&!sameRef)?interlockQuality(pls,plsB):0;
+  const stab=newStability(ilq,supp.avg,cen,ohW,ohL,_gapFracOf(pls));
+  const il=plsB?r2(overlapRatio(pls,plsB)*100):0;
+  return {...p,placements:pls,placementsB:plsB,ohW,ohL,
+    caseSupportPct:supp.avg,minCaseSupport:supp.min,stability:stab,
+    interlockPct:il,wdA:cen,wdB:cen,_maxGap:maxInternalGapG(pls),_ilq:ilq};
+}
+
 // ── Edge-offset wrapper ───────────────────────────────────────
 // The edge offset resizes the build perimeter the cases are allowed to fill:
 //   positive  -> perimeter EXPANDS beyond the pallet (overhang allowed)
@@ -1273,6 +1432,9 @@ function _bpCore(cW, cL, pW, pL){
   // (or the single purposeful zone gap in mixed-orientation layouts), so every
   // pattern can be built by hand exactly as drawn. MAXGAP=0 means the
   // distribution passes pack tight instead of inserting per-case gaps.
+  // NOTE: generation ALWAYS runs tight — the TIGHT OFF spread is applied
+  // afterwards by _spreadPattern() as a pure geometric transform, so the
+  // pattern list (count, names, ranking) is identical in both modes.
   const MAXGAP=0;
   const DEDUP_TOL=1;   // positional tolerance when matching turned/mirrored duplicates
   const SNAP_TOL=2;    // cases misaligned by <= this snap to their neighbors' row/column line
@@ -2803,11 +2965,53 @@ function _bpCore(cW, cL, pW, pL){
 
   result.sort((a,b)=>b.TI!==a.TI?b.TI-a.TI:b._score-a._score);
 
+  // ── VISUAL DISTINCTNESS PASS ─────────────────────────────────────
+  // Registration-time dedup (1" tolerance) catches exact and turned/
+  // mirrored twins, but two patterns can still survive that differ only
+  // by a case or two sliding a few inches — not a meaningfully different
+  // option for an engineer. This final pass compares same-TI patterns
+  // case-for-case (including 180°-turn and mirror equivalents) with a
+  // coarser tolerance and keeps only the highest-ranked of each visual
+  // family, so every row in the list is a visibly different layout.
+  const VIS_TOL=4;   // inches — max per-case displacement that still reads as "the same pattern"
+  const _visMatch=(A,B)=>{
+    if(A.length!==B.length) return false;
+    const used=new Array(B.length).fill(false);
+    for(const pa of A){
+      let best=-1,bd=Infinity;
+      for(let j=0;j<B.length;j++){
+        if(used[j]||Math.abs(B[j].w-pa.w)>0.01||Math.abs(B[j].l-pa.l)>0.01) continue;
+        const d=Math.abs(B[j].x-pa.x)+Math.abs(B[j].y-pa.y);
+        if(d<bd){bd=d;best=j;}
+      }
+      if(best<0||bd>VIS_TOL) return false;
+      used[best]=true;
+    }
+    return true;
+  };
+  const distinct=[];
+  for(const p of result){
+    const isForced=forced.includes(p);
+    let dupIdx=-1;
+    if(p.placements.length<=120){
+      const pn=_norm(p.placements);
+      dupIdx=distinct.findIndex(q=>{
+        if(q.TI!==p.TI||q.placements.length>120) return false;
+        return [_norm(q.placements),_norm(rot180(q.placements)),_norm(flipX(q.placements)),_norm(flipY(q.placements))]
+          .some(v=>_visMatch(pn,v));
+      });
+    }
+    if(dupIdx<0){ distinct.push(p); }
+    else if(isForced && !forced.includes(distinct[dupIdx])){
+      distinct[dupIdx]=p;   // forced pure stacks always survive their visual family
+    }
+  }
+
   // ── RANKING: strictly by case count ──────────────────────────────
   // Highest cases-per-layer first, score as tiebreak. The two pure
   // column stacks are still guaranteed to be IN the list (forced above)
   // but rank by their own case count like every other pattern.
-  const _final=result;
+  const _final=distinct;
   const _ubound=Math.floor((maxW*maxL)/(W0*D0)+1e-9);
   _final.forEach(p=>{ p.maxPossible=_ubound; p.isOptimal=(p.TI>=_ubound); });
   return _final;
@@ -2905,6 +3109,15 @@ function calculate(){
     const maxL=cH>0?Math.max(1,Math.floor((effectiveMaxH-pH)/cH)):1;
     ST.layers=maxL;
     ST.patterns=buildPatterns(cW,cL,pW,pL);
+    // TIGHT/SPREAD distribution — applied to BOTH modes, AFTER generation,
+    // so the list is identical either way (same count, names, order) and
+    // toggling never changes which pattern is selected.
+    //   TIGHT ON:  every row squeezes to touching cases centered on the
+    //              pallet, and the rows squeeze together vertically —
+    //              interior gaps close in BOTH directions.
+    //   TIGHT OFF: rows spread flush to the allowed perimeter with even
+    //              gaps in BOTH directions.
+    ST.patterns=ST.patterns.map(p=>_distributePattern(p,pW,pL));
     ST.layerStack=[];
     applyMultiCaseMix(ST.patterns,valid);
     if(ST.selPat>=ST.patterns.length) ST.selPat=0;
@@ -3010,6 +3223,53 @@ function calculate(){
 }
 
 
+// ── Tight Packing Toggle ───────────────────────────────────────────────
+// TIGHT ON: cases pack flush to the pallet center with minimal gaps.
+// TIGHT OFF (default): cases distribute evenly to the allowed perimeter —
+// outer cases flush against the max allowed length × width, interior gaps
+// equal, center of gravity on the pallet center.
+function toggleTightMode(){
+  ST.tightMode = !ST.tightMode;
+  leUpdateTightBtn();
+  // Rebuild placements. The pattern list is identical in both modes (the
+  // spread is a post-transform of the same tight-generated list), so the
+  // current selection index stays on the SAME pattern — no jumping.
+  // IMPORTANT: layer edits must be CLEARED (not preserved). The layer
+  // editor initialises per-layer edit slots on first access, and every
+  // view (2D canvas, 3D, stats) prefers those stored placements over the
+  // pattern's own — so stale slots would silently mask the new tight/
+  // spread geometry and the toggle would appear to do nothing.
+  const valid = ST.cases.filter(c=>cv(c.w)>0&&cv(c.l)>0&&cv(c.h)>0);
+  if(valid.length && ST.stats){
+    const keepSel = ST.selPat;
+    ST._preserveEdits = false;
+    calculate();
+    if(keepSel < ST.patterns.length && keepSel !== ST.selPat){
+      ST.selPat = keepSel;
+      selPt(keepSel);   // re-sync stats/views to the kept selection
+    }
+  }
+}
+function leUpdateTightBtn(){
+  const btn = document.getElementById('tightBtn');
+  if(!btn) return;
+  // Same visibility rules as the interlock button
+  const isSingle = ST.stats && !ST.stats.multiCaseManual && !ST.stats.multiCase;
+  const show = (ST.view==='2d' || ST.view==='3d') && isSingle && ST.patterns && ST.patterns.length > 0;
+  btn.style.display = show ? 'inline-block' : 'none';
+  if(ST.tightMode){
+    btn.textContent = '▣ TIGHT ON';
+    btn.style.background = '#1a3520';
+    btn.style.color = '#5ec97a';
+    btn.style.borderColor = '#2a6040';
+  } else {
+    btn.textContent = '▣ TIGHT OFF';
+    btn.style.background = '#1a2535';
+    btn.style.color = '#7ac8ff';
+    btn.style.borderColor = '#2a4060';
+  }
+}
+
 // ── Interlock Mode Toggle ──────────────────────────────────────────────
 function toggleInterlockMode(){
   ST.interlockMode = !ST.interlockMode;
@@ -3019,6 +3279,7 @@ function toggleInterlockMode(){
   if(ST.stats) { try{ renderStats(); }catch(e){} }
 }
 function leUpdateInterlockBtn(){
+  try{ leUpdateTightBtn(); }catch(e){}   // tight toggle shares visibility rules
   const btn = document.getElementById('interlockBtn');
   if(!btn) return;
   // Show only in 2D view, single-case, when patterns exist
@@ -8191,6 +8452,7 @@ function _buildKBM(){
       palletKey:        ST.palletKey,
       maxH:             ST.maxH,
       maxOverhang:      ST.maxOverhang,
+      tightMode:        ST.tightMode,
       palletWeightLimit:ST.palletWeightLimit,
       cornerPosts:      ST.cornerPosts,
       slipSheets:       ST.slipSheets,
@@ -8247,6 +8509,8 @@ function _restoreKBM(data){
   ST.palletKey         = s.palletKey   || 'full';
   ST.maxH              = s.maxH        || '';
   ST.maxOverhang       = s.maxOverhang || '';
+  ST.tightMode         = !!s.tightMode;
+  try{ leUpdateTightBtn(); }catch(e){}
   ST.palletWeightLimit = s.palletWeightLimit || '';
   ST.cornerPosts       = !!s.cornerPosts;
   ST.slipSheets        = !!s.slipSheets;
@@ -8330,8 +8594,25 @@ document.addEventListener('keydown', e=>{
   if(e.key==='ArrowUp'||e.key==='ArrowDown'){
     e.preventDefault();
     const dir = e.key==='ArrowUp' ? -1 : 1;
-    const next = Math.max(0, Math.min(ST.patterns.length-1, ST.selPat + dir));
-    if(next !== ST.selPat){
+    // Navigate by the VISIBLE row order in the pattern table (respects any
+    // active column sort), not by original pattern index. Sorting reorders
+    // <tr> nodes but each row keeps its patRow_<index> id, so we walk the
+    // DOM to find the row above/below and read its pattern index from the id.
+    let next = null;
+    const tb = document.getElementById('tBd');
+    const curRow = document.getElementById('patRow_'+ST.selPat);
+    if(tb && curRow && curRow.parentNode === tb){
+      const rows = Array.from(tb.rows);
+      const pos = rows.indexOf(curRow);
+      const tgt = rows[pos + dir];
+      if(tgt && tgt.id && tgt.id.indexOf('patRow_') === 0){
+        next = parseInt(tgt.id.slice(7), 10);
+      }
+    } else {
+      // Table not rendered — fall back to index order
+      next = Math.max(0, Math.min(ST.patterns.length-1, ST.selPat + dir));
+    }
+    if(next !== null && !isNaN(next) && next !== ST.selPat){
       selPt(next);
       // Scroll selected row into view in the pattern table
       const row = document.getElementById('patRow_'+next);
@@ -10658,7 +10939,11 @@ function tblSetup(key, tableEl){
   Array.from(hdr.cells).forEach((th, ci)=>{
     if(th._tblWired) return;           // guard if setup runs twice on same nodes
     th._tblWired = true;
-    th.style.position = 'relative';
+    // 'sticky' (not 'relative') — sticky is a positioned element, so the
+    // absolute resize grips still anchor to the th, AND the inline style no
+    // longer overrides the #tw thead th{position:sticky} frozen-header CSS.
+    // Tables without a CSS top offset behave exactly as before.
+    th.style.position = 'sticky';
     th.style.userSelect = 'none';
     const noSort = th.dataset && th.dataset.nosort !== undefined;
     if(!noSort){
