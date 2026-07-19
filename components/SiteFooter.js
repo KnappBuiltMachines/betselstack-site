@@ -23,6 +23,8 @@ export default function SiteFooter() {
             <Link href="/contact">Contact</Link>
             <Link href="/login">Member Login</Link>
             <Link href="/pricing">Get Access</Link>
+            <Link href="/compare/tops-pro-alternative">TOPS Pro Alternative</Link>
+            <Link href="/compare/cube-iq-alternative">Cube-IQ Alternative</Link>
             <Link href="/privacy">Privacy Policy</Link>
             <Link href="/terms">Terms of Service</Link>
           </nav>
