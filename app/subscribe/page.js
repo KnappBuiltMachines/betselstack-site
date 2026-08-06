@@ -22,22 +22,52 @@ export default async function SubscribePage() {
 
   return (
     <section className="auth-wrap">
-      <div className="auth-card">
+      <div className="auth-card" style={{ maxWidth: 520 }}>
         <h1>Subscribe</h1>
         <p className="sub">
-          Betsel Stack&trade; monthly membership &mdash; full access to the
-          Pallet Pattern Creator.
+          Betsel Stack&trade; membership &mdash; full access to the Pallet
+          Pattern Creator. Signed in as {user.email}.
         </p>
 
-        <div className="price-amount" style={{ marginBottom: 4 }}>
-          <span className="big">$89</span>
-          <span className="per">/ month</span>
+        {/* ---------- Monthly ---------- */}
+        <div className="plan-option">
+          <div className="plan-option__head">
+            <div className="price-amount" style={{ marginBottom: 0 }}>
+              <span className="big" style={{ fontSize: 40 }}>
+                $29
+              </span>
+              <span className="per">/ month</span>
+            </div>
+          </div>
+          <p className="plan-option__note">
+            Billed today, then monthly. Cancel anytime from your account page.
+          </p>
+          <BillingButtons
+            plan="monthly"
+            label="Subscribe monthly"
+            variant="ghost"
+          />
         </div>
-        <p style={{ color: "var(--muted)", marginBottom: 18 }}>
-          Billed today, then monthly. Cancel anytime. Signed in as {user.email}.
-        </p>
 
-        <BillingButtons />
+        {/* ---------- Annual ---------- */}
+        <div className="plan-option plan-option--feature">
+          <span className="price-badge" style={{ marginBottom: 14 }}>
+            Save 20%
+          </span>
+          <div className="plan-option__head">
+            <div className="price-amount" style={{ marginBottom: 0 }}>
+              <span className="big" style={{ fontSize: 40 }}>
+                $279
+              </span>
+              <span className="per">/ year</span>
+            </div>
+          </div>
+          <p className="plan-option__note">
+            $23.25 a month, billed once today. Renews yearly &mdash; you can turn
+            off renewal at any time, and the prepaid year is not refundable.
+          </p>
+          <BillingButtons plan="annual" label="Pay yearly — $279" variant="primary" />
+        </div>
 
         <p className="auth-foot" style={{ marginTop: 18 }}>
           Want to try first? <Link href="/signup">Start a 7-day free trial</Link>
