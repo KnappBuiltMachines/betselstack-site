@@ -8,7 +8,7 @@ const PATH = "/compare/cube-iq-alternative";
 export const metadata = {
   title: "Cube-IQ Alternative — Browser-Based Pallet Pattern Software | Betsel Stack",
   description:
-    "Looking for a Cube-IQ alternative for pallet patterns? Betsel Stack builds pallet patterns and reports in your browser — no install, public $89/mo pricing, and a 7-day free trial.",
+    "Looking for a Cube-IQ alternative for pallet patterns? Betsel Stack builds pallet patterns and reports in your browser — no install, public $29/mo pricing, and a 7-day free trial.",
   keywords: [
     "Cube-IQ alternative",
     "pallet pattern software",
@@ -34,7 +34,7 @@ const faq = [
   },
   {
     q: "How does Betsel Stack pricing compare to Cube-IQ?",
-    a: "Betsel Stack is $89 per month, published on the page, cancel anytime. Cube-IQ uses quote-based enterprise licensing — you contact the vendor for pricing.",
+    a: "Betsel Stack is $29 per month with the monthly plan, or $279 a year if you pay up front, both published on the page. Cube-IQ uses quote-based enterprise licensing — you contact the vendor for pricing.",
   },
   {
     q: "Can I try it before I buy?",
@@ -62,7 +62,7 @@ const faqSchema = {
 
 const rows = [
   ["Deployment", "Browser-based — nothing to install", "Desktop optimization software (install)"],
-  ["Pricing", "$89/month, listed publicly, cancel anytime", "Quote-based enterprise licensing"],
+  ["Pricing", "$29/month or $279/year, listed publicly", "Quote-based enterprise licensing"],
   ["Free trial", "7 days, self-serve, start instantly", "Available on request"],
   ["Access", "Any device with a browser", "Per-seat desktop installs"],
   ["Focus", "Pallet-pattern generation + reporting", "Advanced 3D container / truck / mixed-load optimization"],
@@ -99,7 +99,7 @@ export default function CubeIqAlternative() {
               See the full comparison
             </a>
           </div>
-          <p className="bsa-fineprint">$89/month after trial · cancel anytime · no procurement cycle</p>
+          <p className="bsa-fineprint">$29/month after trial · or $279/year · no procurement cycle</p>
         </div>
         <div className="bsa-hero-art" aria-hidden="true">
           <PalletSVG />
@@ -116,7 +116,7 @@ export default function CubeIqAlternative() {
           />
           <Card
             k="Pricing you can see"
-            v="$89/month, published up front. No enterprise quote or licensing negotiation to get a number."
+            v="$29/month, or $279/year if you pay up front — published on the page. No enterprise quote or licensing negotiation to get a number."
           />
           <Card
             k="Right-sized for the job"
