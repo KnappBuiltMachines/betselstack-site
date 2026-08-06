@@ -94,16 +94,30 @@ export default function TermsPage() {
           subscription begins automatically.
         </li>
         <li>
-          <strong>Subscription.</strong> The Service is offered as a monthly
-          subscription at the price shown on our pricing page at the time you
-          subscribe. Payments are processed by Stripe and billed in advance
-          each month.
+          <strong>Subscription plans.</strong> The Service is offered on a
+          monthly plan or an annual plan, at the prices shown on our pricing
+          page at the time you subscribe. Payments are processed by Stripe. The
+          monthly plan is billed in advance each month. The annual plan is paid
+          in full in advance for a twelve-month term and renews annually unless
+          you turn off renewal.
         </li>
         <li>
-          <strong>Cancellation.</strong> You may cancel at any time from your
-          account page. Cancellation takes effect at the end of the current
-          billing period, and you retain access until then. Except where
-          required by law, payments already made are non-refundable.
+          <strong>Cancellation &mdash; monthly plan.</strong> You may cancel at
+          any time from your account page. Cancellation takes effect at the end
+          of the current monthly billing period, and you retain access until
+          then.
+        </li>
+        <li>
+          <strong>Cancellation &mdash; annual plan.</strong> You may turn off
+          renewal at any time from your account page. Doing so stops the next
+          annual charge and you retain access through the end of the term you
+          have already paid for. Annual terms are prepaid in full and are not
+          refundable in whole or in part, and no credit or proration is issued
+          for any unused portion of a term, except where required by law.
+        </li>
+        <li>
+          <strong>Refunds.</strong> Except where required by law, payments
+          already made are non-refundable.
         </li>
         <li>
           <strong>Price changes.</strong> We may change subscription pricing
