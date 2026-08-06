@@ -8,7 +8,7 @@ const PATH = "/compare/tops-pro-alternative";
 export const metadata = {
   title: "TOPS Pro Alternative — Browser-Based Pallet Pattern Software | Betsel Stack",
   description:
-    "Looking for a TOPS Pro alternative? Betsel Stack builds pallet patterns and reports in your browser — no install, public $89/mo pricing, and a 7-day free trial you can start now.",
+    "Looking for a TOPS Pro alternative? Betsel Stack builds pallet patterns and reports in your browser — no install, public $29/mo pricing, and a 7-day free trial you can start now.",
   keywords: [
     "TOPS Pro alternative",
     "pallet pattern software",
@@ -34,7 +34,7 @@ const faq = [
   },
   {
     q: "How does Betsel Stack pricing compare to TOPS Pro?",
-    a: "Betsel Stack is $89 per month, listed publicly, and you can cancel anytime. TOPS Pro pricing is quote-based — you contact the vendor and typically buy a perpetual license plus annual maintenance.",
+    a: "Betsel Stack is $29 per month with the monthly plan, or $279 a year if you pay up front, both listed publicly. TOPS Pro pricing is quote-based — you contact the vendor and typically buy a perpetual license plus annual maintenance.",
   },
   {
     q: "Can I try it before I buy?",
@@ -62,7 +62,7 @@ const faqSchema = {
 
 const rows = [
   ["Deployment", "Browser-based — nothing to install", "Desktop application (Windows install)"],
-  ["Pricing", "$89/month, listed publicly, cancel anytime", "Contact vendor for a quote; perpetual license + annual maintenance"],
+  ["Pricing", "$29/month or $279/year, listed publicly", "Contact vendor for a quote; perpetual license + annual maintenance"],
   ["Free trial", "7 days, self-serve, start instantly", "Available on request"],
   ["Access", "Any device with a browser", "Per-seat desktop installs"],
   ["Focus", "Pallet-pattern generation + reporting", "Broad suite: carton design, palletizing, container loading"],
@@ -98,7 +98,7 @@ export default function TopsProAlternative() {
               See the full comparison
             </a>
           </div>
-          <p className="bsa-fineprint">$89/month after trial · cancel anytime · no credit card demo call</p>
+          <p className="bsa-fineprint">$29/month after trial · or $279/year · no credit card demo call</p>
         </div>
         <div className="bsa-hero-art" aria-hidden="true">
           <PalletSVG />
@@ -115,7 +115,7 @@ export default function TopsProAlternative() {
           />
           <Card
             k="Pricing you can see"
-            v="$89/month, published on the page. No quote request, no procurement cycle before you know the number."
+            v="$29/month, or $279/year if you pay up front — published on the page. No quote request, no procurement cycle before you know the number."
           />
           <Card
             k="Start today"
