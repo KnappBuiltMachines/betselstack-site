@@ -62,8 +62,8 @@ export default function HomePage() {
                 <div className="lbl">Real-time load visualization</div>
               </div>
               <div className="hero-stat">
-                <div className="num">$89</div>
-                <div className="lbl">Per month, cancel anytime</div>
+                <div className="num">$29</div>
+                <div className="lbl">Per month, or $279 a year</div>
               </div>
             </div>
           </div>
