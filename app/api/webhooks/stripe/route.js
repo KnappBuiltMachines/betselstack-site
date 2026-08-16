@@ -1,5 +1,3 @@
-
-Route · JS
 // app/api/webhooks/stripe/route.js
 //
 // Stripe webhook: subscription state sync (original) + lifecycle email (new).
