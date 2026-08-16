@@ -9,11 +9,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  sendWelcomeEmail,
-  sendTrialEndingEmail,
-  sendInternalSignupAlert,
-} from "@/lib/email";
+import { sendSubscribedEmail, sendInternalAlert, firstNameOf } from "@/lib/email";
  
 export const runtime = "nodejs";
  
@@ -89,10 +85,9 @@ async function resolveRecipient(customerRef) {
   try {
     const customer = await stripe.customers.retrieve(customerId);
     if (customer.deleted) return { email: null, firstName: null };
-    const full = (customer.name || "").trim();
     return {
       email: customer.email || null,
-      firstName: full ? full.split(/\s+/)[0] : null,
+      firstName: firstNameOf(customer.name),
     };
   } catch (err) {
     console.error("Webhook: could not retrieve customer", customerId, err.message);
@@ -101,47 +96,45 @@ async function resolveRecipient(customerRef) {
 }
  
 /**
- * Fire lifecycle email. Never throws — email problems must not trigger a
- * Stripe retry, which would replay the subscription sync unnecessarily.
+ * Post-purchase email. The welcome email is NOT sent here — signup happens in
+ * Supabase, not Stripe (see app/api/webhooks/supabase-signup/route.js).
+ * Never throws: email problems must not trigger a Stripe retry.
  */
 async function handleLifecycleEmail(event) {
   try {
-    if (event.type === "customer.subscription.created") {
-      const sub = event.data.object;
-      if (sub.status !== "trialing") return;
- 
-      if (!(await claimEmailForEvent(event.id, event.type))) return;
- 
-      const { email, firstName } = await resolveRecipient(sub.customer);
-      if (!email) {
-        console.error("Webhook: no email on customer for welcome", sub.id);
-        return;
-      }
- 
-      await sendWelcomeEmail({ to: email, firstName, trialEnd: sub.trial_end });
-      await sendInternalSignupAlert({
-        customerEmail: email,
-        plan: sub.metadata?.plan ?? sub.items?.data?.[0]?.price?.id,
-        trialEnd: sub.trial_end,
-      });
+    if (event.type !== "customer.subscription.created") return;
+
+    const sub = event.data.object;
+    if (!["active", "trialing"].includes(sub.status)) return;
+
+    if (!(await claimEmailForEvent(event.id, event.type))) return;
+
+    const { email, firstName } = await resolveRecipient(sub.customer);
+    if (!email) {
+      console.error("Webhook: no email on customer for subscribed mail", sub.id);
       return;
     }
- 
-    if (event.type === "customer.subscription.trial_will_end") {
-      const sub = event.data.object;
- 
-      if (!(await claimEmailForEvent(event.id, event.type))) return;
- 
-      const { email, firstName } = await resolveRecipient(sub.customer);
-      if (!email) return;
- 
-      await sendTrialEndingEmail({ to: email, firstName, trialEnd: sub.trial_end });
-    }
+
+    const planLabel =
+      sub.metadata?.plan ??
+      sub.items?.data?.[0]?.price?.nickname ??
+      null;
+
+    await sendSubscribedEmail({ to: email, firstName, planLabel });
+
+    await sendInternalAlert({
+      subject: `New Betsel Stack subscriber: ${email}`,
+      lines: [
+        `<strong>${email}</strong> subscribed.`,
+        `Plan: ${planLabel || sub.items?.data?.[0]?.price?.id || "unknown"}`,
+        `Status: ${sub.status}`,
+      ],
+    });
   } catch (err) {
     console.error("Webhook: lifecycle email error on", event.type, err);
   }
 }
- 
+
 /* ------------------------------------------------------------------ */
 /* Route                                                               */
 /* ------------------------------------------------------------------ */
@@ -179,8 +172,7 @@ export async function POST(req) {
       }
       case "customer.subscription.created":
       case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-      case "customer.subscription.trial_will_end": {
+      case "customer.subscription.deleted": {
         await upsertSubscription(event.data.object);
         break;
       }
@@ -207,4 +199,3 @@ export async function POST(req) {
  
   return NextResponse.json({ received: true });
 }
- 
