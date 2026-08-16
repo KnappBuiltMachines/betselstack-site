@@ -1,100 +1,142 @@
-import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
+// app/api/webhooks/stripe/route.js
+//
+// Stripe webhook handler for Betsel Stack lifecycle email.
+//
+// IMPORTANT: if this file already exists in your repo, do NOT replace it.
+// Merge the event cases below into your existing switch statement instead.
+//
+// Environment variables required:
+//   STRIPE_SECRET_KEY            (you already have this)
+//   STRIPE_WEBHOOK_SECRET        whsec_xxxx — from the Stripe webhook endpoint page
+//   NEXT_PUBLIC_SUPABASE_URL     (you already have this)
+//   SUPABASE_SERVICE_ROLE_KEY    (you already have this)
+//   RESEND_API_KEY, EMAIL_FROM, EMAIL_REPLY_TO
 
-export const runtime = "nodejs";
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import {
+  sendWelcomeEmail,
+  sendTrialEndingEmail,
+  sendInternalSignupAlert,
+} from '@/lib/email';
 
-async function upsertSubscription(sub) {
-  const admin = createAdminClient();
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-  let userId = sub.metadata?.userId;
-  if (!userId) {
-    const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-    const { data } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("stripe_customer_id", customerId)
-      .single();
-    userId = data?.id;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+);
+
+/**
+ * Returns true the first time an event id is seen, false on replays.
+ * Relies on the unique index on webhook_events.event_id.
+ */
+async function claimEvent(eventId, eventType) {
+  const { error } = await supabase
+    .from('webhook_events')
+    .insert({ event_id: eventId, event_type: eventType });
+
+  if (error) {
+    // 23505 = unique_violation → we've already handled this event
+    if (error.code === '23505') return false;
+    console.error('[stripe-webhook] idempotency insert failed', error);
+    // Fail open: better a duplicate email than a silently dropped one
+    return true;
   }
-  if (!userId) {
-    console.error("Webhook: could not resolve userId for subscription", sub.id);
-    return;
+  return true;
+}
+
+/** Pull a usable email + first name off the Stripe customer. */
+async function resolveRecipient(customerId, fallbackEmail) {
+  let email = fallbackEmail || null;
+  let firstName = null;
+
+  if (customerId) {
+    try {
+      const customer = await stripe.customers.retrieve(customerId);
+      if (!customer.deleted) {
+        email = customer.email || email;
+        const full = (customer.name || '').trim();
+        if (full) firstName = full.split(/\s+/)[0];
+      }
+    } catch (err) {
+      console.error('[stripe-webhook] could not retrieve customer', customerId, err.message);
+    }
   }
 
-  const priceId = sub.items?.data?.[0]?.price?.id ?? null;
-  const item = sub.items?.data?.[0];
-  const periodEnd = item?.current_period_end ?? sub.current_period_end ?? null;
-
-  await admin.from("subscriptions").upsert(
-    {
-      id: sub.id,
-      user_id: userId,
-      status: sub.status,
-      price_id: priceId,
-      plan: sub.metadata?.plan ?? null,
-      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-      cancel_at_period_end: sub.cancel_at_period_end,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" }
-  );
+  return { email, firstName };
 }
 
 export async function POST(req) {
-  const body = await req.text();
-  const signature = req.headers.get("stripe-signature");
-  if (!signature) {
-    return NextResponse.json({ error: "Missing signature" }, { status: 400 });
-  }
+  const signature = req.headers.get('stripe-signature');
+  const rawBody = await req.text();
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "invalid";
-    return NextResponse.json({ error: `Webhook Error: ${msg}` }, { status: 400 });
+    console.error('[stripe-webhook] signature verification failed:', err.message);
+    return new Response(`Webhook signature verification failed: ${err.message}`, {
+      status: 400,
+    });
+  }
+
+  const isFirstTime = await claimEvent(event.id, event.type);
+  if (!isFirstTime) {
+    console.log('[stripe-webhook] duplicate event ignored', event.id);
+    return Response.json({ received: true, duplicate: true });
   }
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        if (session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription);
-          if (!sub.metadata?.userId && session.client_reference_id) {
-            await stripe.subscriptions.update(sub.id, {
-              metadata: { ...sub.metadata, userId: session.client_reference_id },
-            });
-            sub.metadata = { ...sub.metadata, userId: session.client_reference_id };
-          }
-          await upsertSubscription(sub);
+      /* ---------- Someone signed up and the trial started ---------- */
+      case 'customer.subscription.created': {
+        const sub = event.data.object;
+        if (sub.status !== 'trialing') break;
+
+        const { email, firstName } = await resolveRecipient(sub.customer);
+        if (!email) {
+          console.error('[stripe-webhook] no email on customer', sub.customer);
+          break;
         }
+
+        await sendWelcomeEmail({ to: email, firstName, trialEnd: sub.trial_end });
+
+        await sendInternalSignupAlert({
+          customerEmail: email,
+          plan: sub.items?.data?.[0]?.price?.nickname
+            || sub.items?.data?.[0]?.price?.id,
+          trialEnd: sub.trial_end,
+        });
         break;
       }
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        await upsertSubscription(event.data.object);
+
+      /* ---------- Three days before the trial converts ---------- */
+      case 'customer.subscription.trial_will_end': {
+        const sub = event.data.object;
+        const { email, firstName } = await resolveRecipient(sub.customer);
+        if (!email) break;
+
+        await sendTrialEndingEmail({ to: email, firstName, trialEnd: sub.trial_end });
         break;
       }
-      case "invoice.paid":
-      case "invoice.payment_failed": {
-        const invoice = event.data.object;
-        const subId = invoice.subscription ?? null;
-        if (subId) {
-          const sub = await stripe.subscriptions.retrieve(subId);
-          await upsertSubscription(sub);
-        }
-        break;
-      }
+
       default:
-        break;
+        console.log('[stripe-webhook] unhandled event type', event.type);
     }
   } catch (err) {
-    console.error("Webhook handler error:", err);
-    return NextResponse.json({ error: "Handler error" }, { status: 500 });
+    // Log loudly but return 200 — a 500 makes Stripe retry for three days
+    // and you'd send the same email up to 20 times.
+    console.error('[stripe-webhook] handler error on', event.type, err);
   }
 
-  return NextResponse.json({ received: true });
+  return Response.json({ received: true });
 }
