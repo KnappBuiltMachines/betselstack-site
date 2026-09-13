@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PalletMark from "@/components/PalletMark";
+import Testimonial from "@/components/Testimonial";
 
 const PILLARS = [
   {
@@ -130,6 +131,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* TESTIMONIAL */}
+      <Testimonial style={{ paddingTop: 0 }} />
 
       {/* CTA */}
       <section className="section" style={{ paddingTop: 0 }}>
