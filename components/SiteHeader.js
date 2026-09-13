@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/", label: "Home" },
   { href: "/software", label: "Stack Software" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
 ];
 
