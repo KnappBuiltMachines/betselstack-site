@@ -20,6 +20,7 @@ export default function SiteFooter() {
             <Link href="/">Home</Link>
             <Link href="/software">Stack Software</Link>
             <Link href="/pricing">Pricing</Link>
+            <Link href="/stack-report">The Stack Report</Link>
             <Link href="/faq">FAQ</Link>
             <Link href="/contact">Contact</Link>
             <Link href="/login">Member Login</Link>
