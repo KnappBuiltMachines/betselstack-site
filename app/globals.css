@@ -581,6 +581,10 @@ p { margin: 0; }
   .footer-nav { justify-content: flex-start; }
 }
 
+/* Hidden by default; the 640px media query below turns it on for phones.
+   Must stay ABOVE that query so the mobile rule wins the cascade. */
+.mobile-menu { display: none; }
+
 @media (max-width: 640px) {
   body { font-size: 16px; }
   .section { padding: 64px 0; }
@@ -607,7 +611,6 @@ p { margin: 0; }
   .mobile-menu a:last-child { border-bottom: none; }
 }
 
-.mobile-menu { display: none; }
 
 /* ---------- accessibility ---------- */
 :focus-visible {
