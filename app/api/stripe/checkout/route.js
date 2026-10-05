@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActiveSubscription } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,20 @@ export async function POST(req) {
   }
 
   const admin = createAdminClient();
+
+  // Don't let a current subscriber start a second, separately billed
+  // subscription. Plan changes (monthly <-> annual) go through the portal.
+  const existing = await getActiveSubscription(admin, user.id);
+  if (existing) {
+    return NextResponse.json(
+      {
+        error:
+          "You already have an active subscription. To switch plans or update billing, use Manage billing on your Account page.",
+      },
+      { status: 409 }
+    );
+  }
+
   const { data: profile } = await admin
     .from("profiles")
     .select("stripe_customer_id")

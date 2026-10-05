@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/safe-next";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // /auth/callback sends people here when an email link has expired.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("error") === "link_expired") {
+      setErr("That email link has expired or was already used. Log in, or request a new reset link.");
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -21,7 +29,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    const next = new URLSearchParams(window.location.search).get("next") || "/account";
+    const next = safeNext(new URLSearchParams(window.location.search).get("next"), "/account");
     window.location.href = next;
   };
 

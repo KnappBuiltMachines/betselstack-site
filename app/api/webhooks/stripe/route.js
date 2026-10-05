@@ -1,45 +1,60 @@
 // app/api/webhooks/stripe/route.js
 //
-// Stripe webhook: subscription state sync (original) + lifecycle email (new).
+// Stripe webhook: subscription state sync + lifecycle email.
 //
 // Order matters here. Subscription sync runs first and is allowed to return 500
 // so Stripe retries it. Email sending happens after, gated by an idempotency
 // claim, so a retry re-runs the sync without resending the email.
- 
+
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSubscribedEmail, sendInternalAlert, firstNameOf } from "@/lib/email";
- 
+
 export const runtime = "nodejs";
- 
+
 /* ------------------------------------------------------------------ */
-/* Subscription state sync — unchanged from the original handler       */
+/* Subscription state sync                                             */
 /* ------------------------------------------------------------------ */
- 
+
+function idOf(ref) {
+  if (!ref) return null;
+  return typeof ref === "string" ? ref : ref.id ?? null;
+}
+
+/**
+ * Writes the subscription's current state to Supabase.
+ *
+ * THROWS on any failure. The route turns that into a 500, which makes Stripe
+ * retry the event (for up to 3 days) instead of silently dropping it. Before
+ * this change a failed write still answered 200, so a paying customer could
+ * end up with no access and nothing would ever retry.
+ */
 async function upsertSubscription(sub) {
   const admin = createAdminClient();
- 
+
   let userId = sub.metadata?.userId;
   if (!userId) {
-    const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-    const { data } = await admin
+    const customerId = idOf(sub.customer);
+    const { data, error } = await admin
       .from("profiles")
       .select("id")
       .eq("stripe_customer_id", customerId)
-      .single();
+      .maybeSingle();
+    if (error) {
+      throw new Error(`profile lookup failed for customer ${customerId}: ${error.message}`);
+    }
     userId = data?.id;
   }
   if (!userId) {
-    console.error("Webhook: could not resolve userId for subscription", sub.id);
-    return;
+    throw new Error(`could not resolve userId for subscription ${sub.id}`);
   }
- 
-  const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+
   const item = sub.items?.data?.[0];
+  const priceId = item?.price?.id ?? null;
   const periodEnd = item?.current_period_end ?? sub.current_period_end ?? null;
- 
-  await admin.from("subscriptions").upsert(
+
+  const { error } = await admin.from("subscriptions").upsert(
     {
       id: sub.id,
       user_id: userId,
@@ -52,12 +67,39 @@ async function upsertSubscription(sub) {
     },
     { onConflict: "id" }
   );
+  if (error) {
+    throw new Error(`subscriptions upsert failed for ${sub.id}: ${error.message}`);
+  }
 }
- 
+
+/**
+ * Re-reads the subscription from Stripe before saving it. Stripe does not
+ * guarantee event order, so an older "updated" event can arrive after a newer
+ * one; saving the live object means we always store the latest state.
+ */
+async function syncSubscriptionById(subId) {
+  const sub = await stripe.subscriptions.retrieve(subId);
+  await upsertSubscription(sub);
+  return sub;
+}
+
+/**
+ * Newer Stripe API versions moved the invoice's subscription from
+ * invoice.subscription to invoice.parent.subscription_details.subscription.
+ * Check both so this works on either version.
+ */
+function subscriptionIdFromInvoice(invoice) {
+  return (
+    idOf(invoice.parent?.subscription_details?.subscription) ??
+    idOf(invoice.subscription) ??
+    null
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Email helpers                                                       */
 /* ------------------------------------------------------------------ */
- 
+
 /**
  * Returns true the first time an event id is claimed, false on replays.
  * Relies on the unique constraint on webhook_events.event_id.
@@ -68,7 +110,7 @@ async function claimEmailForEvent(eventId, eventType) {
   const { error } = await admin
     .from("webhook_events")
     .insert({ event_id: eventId, event_type: eventType });
- 
+
   if (error) {
     if (error.code === "23505") return false; // unique_violation: already sent
     console.error("Webhook: idempotency insert failed", error);
@@ -76,12 +118,12 @@ async function claimEmailForEvent(eventId, eventType) {
   }
   return true;
 }
- 
+
 /** Resolve a recipient email and first name from the Stripe customer. */
 async function resolveRecipient(customerRef) {
   const customerId = typeof customerRef === "string" ? customerRef : customerRef?.id;
   if (!customerId) return { email: null, firstName: null };
- 
+
   try {
     const customer = await stripe.customers.retrieve(customerId);
     if (customer.deleted) return { email: null, firstName: null };
@@ -94,7 +136,7 @@ async function resolveRecipient(customerRef) {
     return { email: null, firstName: null };
   }
 }
- 
+
 /**
  * Post-purchase email. The welcome email is NOT sent here — signup happens in
  * Supabase, not Stripe (see app/api/webhooks/supabase-signup/route.js).
@@ -138,14 +180,14 @@ async function handleLifecycleEmail(event) {
 /* ------------------------------------------------------------------ */
 /* Route                                                               */
 /* ------------------------------------------------------------------ */
- 
+
 export async function POST(req) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
   if (!signature) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
- 
+
   let event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET);
@@ -153,13 +195,14 @@ export async function POST(req) {
     const msg = err instanceof Error ? err.message : "invalid";
     return NextResponse.json({ error: `Webhook Error: ${msg}` }, { status: 400 });
   }
- 
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        if (session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription);
+        const subId = idOf(session.subscription);
+        if (subId) {
+          const sub = await stripe.subscriptions.retrieve(subId);
           if (!sub.metadata?.userId && session.client_reference_id) {
             await stripe.subscriptions.update(sub.id, {
               metadata: { ...sub.metadata, userId: session.client_reference_id },
@@ -173,17 +216,13 @@ export async function POST(req) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        await upsertSubscription(event.data.object);
+        await syncSubscriptionById(event.data.object.id);
         break;
       }
       case "invoice.paid":
       case "invoice.payment_failed": {
-        const invoice = event.data.object;
-        const subId = invoice.subscription ?? null;
-        if (subId) {
-          const sub = await stripe.subscriptions.retrieve(subId);
-          await upsertSubscription(sub);
-        }
+        const subId = subscriptionIdFromInvoice(event.data.object);
+        if (subId) await syncSubscriptionById(subId);
         break;
       }
       default:
@@ -193,9 +232,9 @@ export async function POST(req) {
     console.error("Webhook handler error:", err);
     return NextResponse.json({ error: "Handler error" }, { status: 500 });
   }
- 
+
   // Sync succeeded. Email is best-effort and idempotent.
   await handleLifecycleEmail(event);
- 
+
   return NextResponse.json({ received: true });
 }

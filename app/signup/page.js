@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/safe-next";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -15,7 +16,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     const n = new URLSearchParams(window.location.search).get("next");
-    if (n) setNext(n);
+    if (n) setNext(safeNext(n, "/account"));
   }, []);
 
   const handleSignup = async (e) => {
