@@ -5,6 +5,8 @@ const nextConfig = {
   // function on Vercel (it lives outside /public so it can't be fetched directly).
   outputFileTracingIncludes: {
     "/api/builder": ["./protected/**"],
+    "/api/mobile": ["./protected/**"],
+    "/api/engine": ["./protected/**"],
     // The Stack Report reads its Markdown posts at runtime (hourly refresh),
     // so the post files have to ship with those functions too.
     "/stack-report": ["./content/stack-report/**"],
