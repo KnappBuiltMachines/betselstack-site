@@ -50,6 +50,12 @@ function PlanPicker() {
   );
 }
 
+const STATUS_LABELS = {
+  active: "Active",
+  trialing: "Active",
+  past_due: "Payment failed",
+};
+
 export default async function AccountPage() {
   const supabase = await createClient();
   const {
@@ -79,7 +85,18 @@ export default async function AccountPage() {
 
         {sub ? (
           <div>
-            <p>Status: <strong style={amber}>{sub.status}</strong></p>
+            <p>
+              Status:{" "}
+              <strong style={sub.status === "past_due" ? { color: "#ff8a8a" } : amber}>
+                {STATUS_LABELS[sub.status] || sub.status}
+              </strong>
+            </p>
+            {sub.status === "past_due" && (
+              <p style={{ color: "#ff8a8a" }}>
+                Your last payment didn&rsquo;t go through. Use Manage billing below to
+                update your card. You&rsquo;ll keep access while Stripe retries the charge.
+              </p>
+            )}
             {sub.plan && (
               <p style={{ color: "var(--muted)" }}>
                 Plan: {sub.plan === "annual" ? "Yearly — $279/year" : "Monthly — $29/month"}

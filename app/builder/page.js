@@ -44,6 +44,15 @@ export default async function BuilderPage() {
         </Link>
       </div>
 
+      {access.reason === "past_due" && (
+        <div style={{ borderBottom: "1px solid rgba(255,107,107,0.5)", background: "rgba(255,107,107,0.12)", color: "#ff8a8a", textAlign: "center", padding: "8px 16px", fontSize: 14 }}>
+          Your last payment didn&rsquo;t go through.{" "}
+          <Link href="/account" style={{ fontWeight: 600, textDecoration: "underline" }}>
+            Update your card to keep access &rarr;
+          </Link>
+        </div>
+      )}
+
       {access.reason === "trial" && (
         <div style={{ borderBottom: "1px solid rgba(253,180,16,0.4)", background: "rgba(253,180,16,0.1)", color: "var(--amber)", textAlign: "center", padding: "8px 16px", fontSize: 14 }}>
           Free trial &mdash;{" "}
