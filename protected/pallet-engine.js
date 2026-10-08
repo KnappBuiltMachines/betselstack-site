@@ -490,6 +490,26 @@ function newStability(interlock, supportPct, centeringPct, ovW, ovL, gapFrac){
 //   The result stays symmetric about the pallet center (COG centered).
 // Every pass is validated against the whole layer and reverted band-by-band
 // if it would ever create an overlap, so the transform is always safe.
+// Each pass is ALSO reverted if it would leave the layer less tidy than it
+// started (see _misalignCount) — distribution may tighten or spread a layout
+// but never knock cases off their shared row/column lines.
+
+// Count near-miss alignments: same-size cases whose row (y) or column (x)
+// start lines differ by a small amount (0.05"–2") — the "randomly placed"
+// look. Exact alignment and purposeful offsets (> 2") don't count.
+function _misalignCount(pls){
+  let m=0;
+  [['y','l'],['x','w']].forEach(([pos,size])=>{
+    const groups=new Map();
+    pls.forEach(p=>{const k=Math.round(p[size]*100);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p[pos]);});
+    groups.forEach(v=>{
+      v.sort((a,b)=>a-b);
+      for(let i=1;i<v.length;i++){const d=v[i]-v[i-1]; if(d>0.05&&d<=2) m++;}
+    });
+  });
+  return m;
+}
+
 function _distributeLayer(pls, pW, pL, tight){
   if(!pls || !pls.length) return null;
   const _OH=(ST.maxOverhang===''||ST.maxOverhang===null||ST.maxOverhang===undefined)?0:parseFloat(ST.maxOverhang)||0;
@@ -545,6 +565,8 @@ function _distributeLayer(pls, pW, pL, tight){
   // SPREAD: each row spans the full allowed width with equal gaps.
   // Each band is validated against the whole layer and reverted
   // individually (protects layouts where a tall case spans bands).
+  const mis0=_misalignCount(out);
+  const xBefore=out.map(p=>p.x);
   bands.forEach(b=>{
     const s=b.cases.sort((a,c)=>a.x-c.x);
     const orig=s.map(p=>p.x);
@@ -552,6 +574,11 @@ function _distributeLayer(pls, pW, pL, tight){
     s.forEach((p,i)=>{p.x=xs[i];});
     if(!ok(out)) s.forEach((p,i)=>{p.x=orig[i];});
   });
+  // Tidiness guard: if the row pass knocked cases off shared column lines
+  // (e.g. two side-by-side column groups whose row lines differ), undo it.
+  if(_misalignCount(out)>mis0) out.forEach((p,i)=>{p.x=xBefore[i];});
+  const mis1=_misalignCount(out);
+  const yBefore=out.map(p=>p.y);
 
   // ── 3. BAND PASS (y direction) ────────────────────────────────────
   // Bands whose y-ranges overlap merge into one rigid strip (keeps
@@ -594,6 +621,8 @@ function _distributeLayer(pls, pW, pL, tight){
       if(!ok(out)) s.forEach((p,i)=>{p.y=orig[i];});
     });
   }
+  // Same tidiness guard for the vertical pass.
+  if(_misalignCount(out)>mis1) out.forEach((p,i)=>{p.y=yBefore[i];});
 
   return ok(out)?out:null;
 }
@@ -1096,8 +1125,17 @@ function _bpCore(cW, cL, pW, pL){
         flush();
       });
     };
-    snapAxis('y','l');   // row alignment (same-length cases)
-    snapAxis('x','w');   // column alignment (same-width cases)
+    // Repeat until stable: one row's snap is often blocked by a neighbouring
+    // row that has not been snapped yet (e.g. two block-pattern header rows
+    // offset by the same amount — the upper row can only move once the lower
+    // one has). Each pass only ever applies validated snaps, so looping can
+    // never create an overlap; the cap keeps it bounded.
+    for(let pass=0;pass<6;pass++){
+      const before=cur;
+      snapAxis('y','l');   // row alignment (same-length cases)
+      snapAxis('x','w');   // column alignment (same-width cases)
+      if(cur===before) break;   // no cluster accepted this pass
+    }
     return cur;
   };
 
