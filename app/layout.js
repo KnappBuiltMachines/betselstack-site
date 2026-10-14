@@ -19,6 +19,9 @@ export const metadata = {
     siteName: "Betsel Stack",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export const viewport = {

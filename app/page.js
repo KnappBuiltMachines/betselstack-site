@@ -1,174 +1,270 @@
-import Link from "next/link";
-import PalletMark from "@/components/PalletMark";
-import Testimonial from "@/components/Testimonial";
+// app/page.js — Betsel Stack home page (showcase redesign, Oct 2026)
+// Replaces the ENTIRE contents of app/page.js.
+// Needs these new files next to it:
+//   app/home.css
+//   components/HeroPallet.js
+//   components/TiHiDemo.js
+//   components/HomeMotion.js
+// Uses existing assets only: /screenshots/*.jpg and the software tour video.
 
-const PILLARS = [
+import Link from "next/link";
+import "./home.css";
+import HeroPallet from "@/components/HeroPallet";
+import TiHiDemo from "@/components/TiHiDemo";
+import Testimonial from "@/components/Testimonial";
+import { RevealObserver, LoopVideo } from "@/components/HomeMotion";
+
+export const metadata = {
+  title: { absolute: "Betsel Stack™ — Pallet Pattern Software in Your Browser" },
+  description:
+    "Fit more on every pallet. Betsel Stack ranks the best pallet patterns for your case in seconds, shows the load in 3D, and plans the trailer — right in your browser. $29/month, 7-day free trial, no card.",
+};
+
+const CHAPTERS = [
   {
-    t: "Deeper customization",
-    d: "Build patterns the way your spec demands, not the way a template forces. Control orientation, overhang, and stacking rules down to the case.",
+    tag: "Pattern engine",
+    title: ["Start from the best pattern.", "Not a blank screen."],
+    body: "Enter a case and a pallet. Betsel Stack returns 50+ layouts, ranked by cubic efficiency, case support, and stability.",
+    img: "/screenshots/builder.jpg",
+    alt: "Pallet Pattern Builder showing a ranked pattern list and a 3D unit load",
   },
   {
-    t: "Real-time 3D",
-    d: "Inspect the unit load and pattern from any angle before a single case is stacked on the floor.",
+    tag: "Layer planning",
+    title: ["Every layer,", "called out."],
+    body: "Step through the load one layer at a time, interlocked or alternating, with every case placed and turned exactly as it ships.",
+    img: "/screenshots/layers-2d.jpg",
+    alt: "Layer-by-layer 2D build map with case placement",
   },
   {
-    t: "Mixed-case loads",
-    d: "Real shipments are not one SKU. Combine different case sizes on a single pallet, layer by layer.",
+    tag: "Mixed-case loads",
+    title: ["Real shipments", "aren’t one SKU."],
+    body: "Stack different case sizes on one pallet, layer by layer, and see the finished unit load in 3D before anyone builds it.",
+    img: "/screenshots/mixed-3d.jpg",
+    alt: "3D view of a mixed-case pallet with three case sizes",
   },
   {
-    t: "Trailer optimization",
-    d: "Plan how pallets fit a 53' reefer, dry van, or custom trailer with live counts and a balance check.",
+    tag: "Trailer loading",
+    title: ["Fill the trailer.", "Keep it balanced."],
+    body: "Drop pallets into a 53′ reefer, dry van, or custom trailer. Live counts and a center-of-mass check tell you it works.",
+    img: "/screenshots/truck-load.jpg",
+    alt: "Trailer top view loaded with 26 pallets, balanced",
+    wide: true,
   },
 ];
 
-const CAPS = [
-  ["Standard & custom pallets", "GMA, block, stringer, and fully custom dimensions \u2014 quarter pallet to oversized."],
-  ["Board-level layout", "Deck boards, stringers, spacing, and overhang all under your control."],
-  ["50+ patterns instantly", "Enter case and pallet dimensions and get dozens of ranked layouts in seconds."],
-  ["Layer planning", "Step through the load one layer at a time with exact placement and orientation."],
-  ["Custom reports", "Branded reports, custom-generated to meet your company\u2019s standards."],
+const NOS = [
+  ["No install.", "It runs in your browser, on a Mac or a PC."],
+  ["No license keys.", "Sign in from any computer and your patterns are there."],
+  ["No IT ticket.", "Nothing to download, so nothing to approve."],
+  ["No sales call.", "Start a full 7-day trial yourself. No card required."],
 ];
 
 export default function HomePage() {
   return (
-    <>
-      {/* HERO */}
-      <section className="hero">
-        <div className="container hero-grid">
-          <div>
-            <p className="eyebrow">Betsel Stack&trade;</p>
-            <h1>
-              The <span className="accent">Pallet Pattern</span> Creator
-            </h1>
-            <p className="lead">
-              Advanced pallet pattern software for packaging engineers. Go far
-              beyond Ti-Hi &mdash; build complex mixed-case patterns, customize
-              footprints, and optimize trailer loading, all with real-time 3D.
+    <div className="hm">
+      <RevealObserver />
+
+      {/* ============ HERO ============ */}
+      <section className="hm-hero">
+        <div className="hm-floor" aria-hidden="true" />
+        <div className="container hm-hero-inner">
+          <p className="hm-kicker rv">Betsel Stack&trade; Pallet Pattern Creator</p>
+          <h1 className="hm-display rv">
+            Fit more on every pallet.
+            <span className="hm-dim">Ship fewer trucks.</span>
+          </h1>
+          <p className="hm-sub rv">
+            The best pallet patterns for your case, ranked in seconds. Checked
+            in 3D. Loaded into the trailer. All in your browser.
+          </p>
+          <div className="hm-actions rv">
+            <Link href="/signup" className="btn btn--primary hm-btn-lg">
+              Start free trial
+            </Link>
+            <a href="#try" className="hm-textlink">
+              Try it right here <span aria-hidden="true">&darr;</span>
+            </a>
+          </div>
+          <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
+        </div>
+        <div className="hm-hero-stage rv">
+          <HeroPallet />
+        </div>
+      </section>
+
+      {/* ============ PROOF STRIP ============ */}
+      <section className="hm-proof">
+        <div className="container hm-proof-grid">
+          <div className="rv"><b>Seconds</b><span>from case size to ranked patterns</span></div>
+          <div className="rv"><b>50+</b><span>patterns scored for every case</span></div>
+          <div className="rv"><b>0</b><span>software to install</span></div>
+          <div className="rv"><b>$29</b><span>a month, or $279 a year</span></div>
+        </div>
+      </section>
+
+      {/* ============ TRY IT ============ */}
+      <section className="hm-section" id="try">
+        <div className="container">
+          <div className="hm-head rv">
+            <p className="hm-tag">Try it now</p>
+            <h2 className="hm-h2">Type a case. Watch it stack.</h2>
+            <p className="hm-lede">
+              No sign-up for this part. Change any number and the layer redraws
+              instantly.
             </p>
-            <div className="hero-actions">
-              <Link href="/signup" className="btn btn--primary">
-                Start 7-day free trial &rarr;
-              </Link>
-              <Link href="/software" className="btn btn--ghost">
-                See the software
-              </Link>
+          </div>
+          <div className="rv">
+            <TiHiDemo />
+          </div>
+        </div>
+      </section>
+
+      {/* ============ CHAPTERS ============ */}
+      {CHAPTERS.map((c, i) => (
+        <section className={`hm-chapter ${i % 2 ? "hm-chapter--alt" : ""}`} key={c.tag}>
+          <div className="container">
+            <div className="hm-head hm-head--center rv">
+              <p className="hm-tag">{c.tag}</p>
+              <h2 className="hm-h2">
+                {c.title[0]}
+                <br />
+                <span className="hm-dim">{c.title[1]}</span>
+              </h2>
+              <p className="hm-lede">{c.body}</p>
             </div>
-            <div className="hero-stats">
-              <div className="hero-stat">
-                <div className="num">50+</div>
-                <div className="lbl">Ranked patterns, instantly</div>
-              </div>
-              <div className="hero-stat">
-                <div className="num">3D</div>
-                <div className="lbl">Real-time load visualization</div>
-              </div>
-              <div className="hero-stat">
-                <div className="num">$29</div>
-                <div className="lbl">Per month, or $279 a year</div>
-              </div>
-            </div>
+            <figure className={`hm-shot rv ${c.wide ? "hm-shot--wide" : ""}`}>
+              <img src={c.img} alt={c.alt} loading="lazy" decoding="async" />
+            </figure>
           </div>
-          <div className="pallet-wrap">
-            <PalletMark />
-          </div>
-        </div>
-      </section>
+        </section>
+      ))}
 
-      {/* WHY */}
-      <section className="section">
+      {/* ============ WATCH ============ */}
+      <section className="hm-section hm-watch">
         <div className="container">
-          <p className="eyebrow">Why it exists</p>
-          <h2 className="section-title">
-            Most inefficiency starts before the line
-          </h2>
-          <div className="grid grid-2" style={{ marginTop: 28, gap: 40 }}>
-            <p className="lead" style={{ marginTop: 0 }}>
-              Many of the biggest costs in packaging and freight are decided
-              long before a product reaches the line &mdash; they start with the
-              pallet. Betsel Stack&trade; was built by people who understand the
-              realities of packaging, automation, warehousing, and transportation.
-            </p>
-            <p className="lead" style={{ marginTop: 0 }}>
-              By combining flexibility, real-time visualization, and
-              engineering-focused tools, it helps teams improve pallet
-              efficiency, maximize trailer utilization, cut transportation
-              costs, and develop smarter packaging &mdash; whether the solution
-              is a single SKU or a complex mixed load.
+          <div className="hm-head hm-head--center rv">
+            <p className="hm-tag">Reports</p>
+            <h2 className="hm-h2">
+              From first pattern
+              <br />
+              <span className="hm-dim">to a branded report.</span>
+            </h2>
+            <p className="hm-lede">
+              Build it, check it, load it, and export a pallet pattern
+              engineering report with dimensions, efficiency, stability, and
+              weights, ready for your customer or your floor.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* PILLARS */}
-      <section className="section" style={{ paddingTop: 0 }}>
-        <div className="container">
-          <p className="eyebrow">What sets it apart</p>
-          <h2 className="section-title">Built for the way loads really ship</h2>
-          <div className="grid grid-4" style={{ marginTop: 36 }}>
-            {PILLARS.map((p, i) => (
-              <div className="card" key={p.t}>
-                <div className="card-icon">{ICONS[i]}</div>
-                <h3>{p.t}</h3>
-                <p>{p.d}</p>
-              </div>
-            ))}
+          <div className="hm-video rv">
+            <LoopVideo
+              src="/betsel-software-tour.mp4"
+              poster="/betsel-software-tour-poster.jpg"
+              label="Betsel Stack building a pallet pattern, checking it in 3D, loading a trailer, and exporting a report"
+            />
           </div>
+          <p className="hm-center rv">
+            <Link href="/software#watch" className="hm-textlink">
+              Watch the full guided tour <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </p>
         </div>
       </section>
 
-      {/* CAPABILITIES */}
-      <section className="section" style={{ paddingTop: 0 }}>
+      {/* ============ NO BAGGAGE ============ */}
+      <section className="hm-section">
         <div className="container">
-          <p className="eyebrow">In the toolkit</p>
-          <h2 className="section-title">Everything in one engineering tool</h2>
-          <div className="grid grid-3" style={{ marginTop: 36 }}>
-            {CAPS.map(([t, d]) => (
-              <div className="card" key={t}>
+          <div className="hm-head rv">
+            <p className="hm-tag">Why switch</p>
+            <h2 className="hm-h2">
+              Pallet software,
+              <br />
+              <span className="hm-dim">without the baggage.</span>
+            </h2>
+          </div>
+          <div className="hm-nos">
+            {NOS.map(([t, d]) => (
+              <div className="hm-no rv" key={t}>
                 <h3>{t}</h3>
                 <p>{d}</p>
               </div>
             ))}
           </div>
+          <p className="hm-compare rv">
+            Coming from desktop software? See how it compares with{" "}
+            <Link href="/compare/tops-pro-alternative">TOPS Pro</Link> and{" "}
+            <Link href="/compare/cube-iq-alternative">Cube-IQ</Link>.
+          </p>
         </div>
       </section>
 
-      {/* TESTIMONIAL */}
-      <Testimonial style={{ paddingTop: 0 }} />
+      {/* ============ ORIGIN ============ */}
+      <section className="hm-origin">
+        <div className="container hm-origin-inner rv">
+          <p className="hm-tag">Who builds it</p>
+          <h2 className="hm-h2">Made by people who build packaging machines.</h2>
+          <p className="hm-lede">
+            Betsel Stack comes from the team at Knapp Built Machines, a
+            family-owned maker of agricultural packaging and vegetable
+            processing equipment in Hammonton, New Jersey. We spend our days
+            around packing lines, cases, and pallets, and we built Betsel Stack
+            around the questions packaging engineers actually ask.
+          </p>
+        </div>
+      </section>
 
-      {/* CTA */}
-      <section className="section" style={{ paddingTop: 0 }}>
+      {/* ============ TESTIMONIAL ============ */}
+      <div className="rv">
+        <Testimonial />
+      </div>
+
+      {/* ============ PRICING ============ */}
+      <section className="hm-section" id="pricing">
         <div className="container">
-          <div className="cta-band">
-            <p className="eyebrow" style={{ justifyContent: "center", display: "flex" }}>
-              Get started
-            </p>
-            <h2>Start your 7-day free trial</h2>
-            <p>
-              Full access to the Pallet Pattern Creator &mdash; no credit card
-              required. Add a card whenever you are ready to keep going.
-            </p>
-            <div className="cta-actions">
-              <Link href="/signup" className="btn btn--primary">
-                Start free trial
-              </Link>
-              <Link href="/software" className="btn btn--ghost">
-                See it in action
-              </Link>
+          <div className="hm-head hm-head--center rv">
+            <p className="hm-tag">Pricing</p>
+            <h2 className="hm-h2">One plan. Everything included.</h2>
+            <p className="hm-lede">Every trial starts with 7 free days and full access. No card needed.</p>
+          </div>
+          <div className="hm-plans">
+            <div className="hm-plan rv">
+              <p className="hm-plan-name">Monthly</p>
+              <p className="hm-plan-price"><b>$29</b><span>/ month</span></p>
+              <p className="hm-plan-note">Cancel anytime.</p>
+              <Link href="/signup" className="btn btn--ghost btn--block">Start free trial</Link>
             </div>
+            <div className="hm-plan hm-plan--best rv">
+              <span className="hm-plan-badge">Save 20%</span>
+              <p className="hm-plan-name">Annual</p>
+              <p className="hm-plan-price"><b>$279</b><span>/ year</span></p>
+              <p className="hm-plan-note">About $23 a month, billed once a year.</p>
+              <Link href="/signup" className="btn btn--primary btn--block">Start free trial</Link>
+            </div>
+          </div>
+          <p className="hm-center hm-fine rv">
+            Both plans include the full Pallet Pattern Creator: ranked patterns,
+            3D, mixed cases, trailer loading, and custom reports.{" "}
+            <Link href="/pricing" className="hm-inline">Plan details</Link>
+          </p>
+        </div>
+      </section>
+
+      {/* ============ FINAL CTA ============ */}
+      <section className="hm-final">
+        <div className="container rv">
+          <h2 className="hm-display hm-display--sm">
+            Your next pallet pattern
+            <span className="hm-dim">is a few seconds away.</span>
+          </h2>
+          <div className="hm-actions hm-actions--center">
+            <Link href="/signup" className="btn btn--primary hm-btn-lg">
+              Start free trial
+            </Link>
+            <Link href="/contact" className="hm-textlink">
+              Talk to us <span aria-hidden="true">&rarr;</span>
+            </Link>
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }
-
-const ICONS = [
-  // sliders
-  <svg key="0" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="17" x2="20" y2="17" /><circle cx="9" cy="7" r="2.4" fill="#0b0c0e" /><circle cx="15" cy="17" r="2.4" fill="#0b0c0e" /></svg>,
-  // cube
-  <svg key="1" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 2 21 7v10l-9 5-9-5V7z" /><path d="M3 7l9 5 9-5M12 12v10" /></svg>,
-  // layers
-  <svg key="2" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 3 3 8l9 5 9-5z" /><path d="M3 13l9 5 9-5" /></svg>,
-  // truck
-  <svg key="3" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M2 6h11v9H2zM13 9h4l3 3v3h-7z" /><circle cx="7" cy="18" r="1.8" /><circle cx="17" cy="18" r="1.8" /></svg>,
-];

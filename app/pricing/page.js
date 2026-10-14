@@ -8,7 +8,7 @@ const CORE_FEATURES = [
   "Real-time 3D load visualization",
   "Mixed-case pallet patterns",
   "Standard & custom pallet sizes",
-  "PDF & Excel report export",
+  "Custom branded PDF reports",
 ];
 
 const MONTHLY_FEATURES = [...CORE_FEATURES, "Cancel anytime"];
