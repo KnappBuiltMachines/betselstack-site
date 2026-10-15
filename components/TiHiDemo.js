@@ -11,10 +11,11 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 const PALLETS = [
-  { id: "gma", label: "48 × 40 GMA", L: 48, W: 40 },
-  { id: "eur", label: "EUR 1200 × 800", L: 47.24, W: 31.5 },
-  { id: "sq42", label: "42 × 42", L: 42, W: 42 },
-  { id: "sq48", label: "48 × 48", L: 48, W: 48 },
+  { id: "full", label: "Full (48 × 40″)", L: 48, W: 40 },
+  { id: "half", label: "Half (48 × 20″)", L: 48, W: 20 },
+  { id: "quarter", label: "Quarter (24 × 20″)", L: 24, W: 20 },
+  { id: "sixth", label: "Sixth (16 × 20″)", L: 16, W: 20 },
+  { id: "custom", label: "Custom" },
 ];
 
 const EXAMPLES = [[16, 12, 10], [15, 11, 8], [18, 13, 11]];
@@ -85,11 +86,18 @@ export default function TiHiDemo() {
   const [cw, setCw] = useState("8");
   const [ch, setCh] = useState("9");
   const [maxH, setMaxH] = useState("48");
-  const [palId, setPalId] = useState("gma");
-  const pal = PALLETS.find((p) => p.id === palId);
+  const [palId, setPalId] = useState("full");
+  const [customL, setCustomL] = useState("48");
+  const [customW, setCustomW] = useState("40");
+  const isCustom = palId === "custom";
+  const pal = isCustom
+    ? { L: num(customL), W: num(customW) }
+    : PALLETS.find((p) => p.id === palId);
 
   const r = useMemo(() => {
     const L = num(cl), Wd = num(cw), Ht = num(ch), M = num(maxH);
+    if (!pal.L || !pal.W) return { err: "Enter your custom pallet length and width." };
+    if (pal.L > 120 || pal.W > 120) return { err: "Custom pallets up to 120 in are supported here." };
     if (!L || !Wd || !Ht || !M) return { err: "Enter all four sizes to see a layer." };
     if (Math.min(L, Wd) < 1.5) return { err: "Cases under 1.5 in are best handled in the full app." };
     if (Math.min(L, Wd) > Math.max(pal.L, pal.W) || (L > pal.L && L > pal.W) || (Wd > pal.L && Wd > pal.W))
@@ -100,7 +108,8 @@ export default function TiHiDemo() {
     if (!hi) return { err: "The case is taller than your max load height." };
     const fp = (n * L * Wd) / (pal.L * pal.W);
     return { n, hi, total: n * hi, fp, rects };
-  }, [cl, cw, ch, maxH, pal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cl, cw, ch, maxH, palId, customL, customW]);
 
   const field = (id, label, v, set) => (
     <label className="td-field" htmlFor={id}>
@@ -141,6 +150,12 @@ export default function TiHiDemo() {
             </button>
           ))}
         </div>
+        {isCustom && (
+          <div className="td-row td-row--two">
+            {field("td-pl", "Pallet length", customL, setCustomL)}
+            {field("td-pw", "Pallet width", customW, setCustomW)}
+          </div>
+        )}
         <div className="td-row td-row--one">{field("td-m", "Max load height", maxH, setMaxH)}</div>
         <div className="td-try">
           <span>Try:</span>
@@ -159,11 +174,11 @@ export default function TiHiDemo() {
       <div className="td-out" aria-live="polite">
         <div className="td-canvas">
           <svg
-            viewBox={`${-pad} ${-pad} ${pal.L + pad * 2} ${pal.W + pad * 2}`}
+            viewBox={`${-pad} ${-pad} ${(pal.L || 48) + pad * 2} ${(pal.W || 40) + pad * 2}`}
             role="img"
             aria-label={r.err ? r.err : `Best block layer: ${r.n} cases per layer`}
           >
-            <rect x="0" y="0" width={pal.L} height={pal.W} rx="0.6" className="td-pal" />
+            <rect x="0" y="0" width={pal.L || 48} height={pal.W || 40} rx="0.6" className="td-pal" />
             {!r.err &&
               r.rects.map((c, i) => (
                 <rect

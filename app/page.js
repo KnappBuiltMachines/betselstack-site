@@ -5,14 +5,14 @@
 //   components/HeroPallet.js
 //   components/TiHiDemo.js
 //   components/HomeMotion.js
-// Uses existing assets only: /screenshots/*.jpg and the software tour video.
+// Uses the screenshots in /public/screenshots/.
 
 import Link from "next/link";
 import "./home.css";
 import HeroPallet from "@/components/HeroPallet";
 import TiHiDemo from "@/components/TiHiDemo";
 import Testimonial from "@/components/Testimonial";
-import { RevealObserver, LoopVideo } from "@/components/HomeMotion";
+import { RevealObserver } from "@/components/HomeMotion";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Pallet Pattern Software in Your Browser" },
@@ -41,6 +41,7 @@ const CHAPTERS = [
     body: "Stack different case sizes on one pallet, layer by layer, and see the finished unit load in 3D before anyone builds it.",
     img: "/screenshots/mixed-3d.jpg",
     alt: "3D view of a mixed-case pallet with three case sizes",
+    narrow: true,
   },
   {
     tag: "Trailer loading",
@@ -132,7 +133,7 @@ export default function HomePage() {
               </h2>
               <p className="hm-lede">{c.body}</p>
             </div>
-            <figure className={`hm-shot rv ${c.wide ? "hm-shot--wide" : ""}`}>
+            <figure className={`hm-shot rv ${c.wide ? "hm-shot--wide" : ""} ${c.narrow ? "hm-shot--narrow" : ""}`}>
               <img src={c.img} alt={c.alt} loading="lazy" decoding="async" />
             </figure>
           </div>
@@ -154,13 +155,6 @@ export default function HomePage() {
               engineering report with dimensions, efficiency, stability, and
               weights, ready for your customer or your floor.
             </p>
-          </div>
-          <div className="hm-video rv">
-            <LoopVideo
-              src="/betsel-software-tour.mp4"
-              poster="/betsel-software-tour-poster.jpg"
-              label="Betsel Stack building a pallet pattern, checking it in 3D, loading a trailer, and exporting a report"
-            />
           </div>
           <p className="hm-center rv">
             <Link href="/software#watch" className="hm-textlink">
@@ -197,20 +191,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ============ ORIGIN ============ */}
-      <section className="hm-origin">
-        <div className="container hm-origin-inner rv">
-          <p className="hm-tag">Who builds it</p>
-          <h2 className="hm-h2">Made by people who build packaging machines.</h2>
-          <p className="hm-lede">
-            Betsel Stack comes from the team at Knapp Built Machines, a
-            family-owned maker of agricultural packaging and vegetable
-            processing equipment in Hammonton, New Jersey. We spend our days
-            around packing lines, cases, and pallets, and we built Betsel Stack
-            around the questions packaging engineers actually ask.
-          </p>
-        </div>
-      </section>
 
       {/* ============ TESTIMONIAL ============ */}
       <div className="rv">
