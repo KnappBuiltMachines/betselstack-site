@@ -275,6 +275,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
   <div class="mnu-item">
     <button class="mnu-btn" onclick="mnuToggle('mnuHelp')">Help</button>
     <div class="mnu-dropdown" id="mnuHelp">
+      <div class="mnu-sub" onclick="mnuTourToggle()">Tutorial Mode <span id="mnuTourState">OFF</span></div>
+      <div class="mnu-sub" onclick="mnuTourRestart()">Restart Tutorial</div>
       <div class="mnu-sub" onclick="mnuUserGuide()">User Guide</div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuAbout()">About Pallet Pattern Builder</div>
@@ -6110,6 +6112,8 @@ async function _loadSettingsCloud(){
     if(!res.ok) return;
     const row = await res.json();
     if(row && row.data && typeof row.data === 'object'){
+      // Saved settings from before Tutorial Mode existed = returning user (no auto tour prompt)
+      if(Object.keys(row.data).length && !row.data.tour) window._bsReturningUser = true;
       Object.assign(KBM_SETTINGS, row.data);  // cloud is source of truth for this user
       _saveSettings();                         // mirror into the local cache
       // Mirror the cloud copy of the Report Builder custom layout into its
@@ -6964,7 +6968,7 @@ function mnuUserGuide(){
 
 // ── Load persisted settings on startup ───────────────────────
 _loadSettings();       // instant: local cache
-_loadSettingsCloud();  // then sync the user's durable cloud copy on top
+const _settingsReady = _loadSettingsCloud();  // then sync the user's durable cloud copy on top (tutorial waits on this)
 
 // ═══════════════════════════════════════════════════════════════
 // REPORT BUILDER — Visual drag-and-drop report canvas
@@ -8725,6 +8729,582 @@ renderTable = function(){
   _tblOrigRenderTable.apply(this, arguments);
   try{ tblSetup('pat', document.querySelector('#tw table')); }catch(e){ console.error('[tblSetup pat]', e); }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// TUTORIAL MODE — guided, step-by-step tour of the builder
+// • First-time users get a prompt automatically (once).
+// • Help → Tutorial Mode turns it on/off any time; Help → Restart
+//   Tutorial starts over from the beginning.
+// • The user can always leave: ✕ button, "End tour", or Esc.
+// • Every step has a NEXT STEP button. On typing steps it turns on
+//   once the needed fields are filled in. Only "click this button"
+//   steps move on by themselves (when the user clicks the button).
+// • Steps that need a pattern are skipped if no pattern exists, so
+//   the tour can never loop or stall.
+// • The card can be dragged by its top bar if it's in the way.
+// • Progress is kept in KBM_SETTINGS.tour (local cache + account).
+// To edit wording or add a step, change TOUR_STEPS below.
+// ═══════════════════════════════════════════════════════════════
+const TOUR = { active:false, idx:0, pollT:null, rafT:null, lastRect:'', flags:{}, sig:'', manual:null, t0:0, wasDone:false, advancing:false };
+
+function _tourEl(sel){
+  if(typeof sel === 'function'){ try{ return sel(); }catch(e){ return null; } }
+  return sel ? document.querySelector(sel) : null;
+}
+function _tourVisible(el){
+  if(!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 2 && r.height > 2;
+}
+function _tourCsOpen(){
+  const o = document.getElementById('csOverlay');
+  return !!o && o.style.display === 'flex';
+}
+function _tourHasPatterns(){ return !!(ST.patterns && ST.patterns.length && ST.stats); }
+function _tourHasCase(){
+  return ST.cases.some(c => cv(c.l) > 0 && cv(c.w) > 0 && cv(c.h) > 0);
+}
+function _tourCsHasResults(){ return !!document.querySelector('#csResults table'); }
+function _tourSampleCase(){
+  const c = ST.cases[0];
+  if(ST.isMetric){ c.l = 305; c.w = 254; c.h = 203; c.wt = 9; }
+  else           { c.l = 12;  c.w = 10;  c.h = 8;   c.wt = 20; }
+  renderCaseList();
+  if(typeof leRenderCasePalette === 'function') leRenderCasePalette();
+  _autoCalculate(50);
+  TOUR.t0 = Date.now();
+}
+function _tourCsColumn(which){
+  // Left (inputs) or right (results) column of the Case Size Calculator
+  const left = document.getElementById('csCuboidIn').closest('div[style*="flex:0 0 280px"]');
+  return which === 'left' ? left : document.getElementById('csResults').parentElement.parentElement;
+}
+
+// ── Steps ─────────────────────────────────────────────────────
+// kind:   'info'  → read, then NEXT STEP
+//         'click' → user clicks the highlighted button; moves on by itself
+//         'input' → user types; NEXT STEP turns on when gate() is true
+// todo:   the one thing to do on this step (shown in the DO THIS box)
+// done:   click steps — true once the click happened
+// status: input steps — {ok, text, warn} shown under the DO THIS box
+// gate:   input steps — NEXT STEP is enabled only when this is true
+// links:  extra options under the card, e.g. "Use a sample case"
+// avoid:  elements the card must not cover (besides the target)
+// needs:  'patterns' → skipped when there's no pattern to show
+const TOUR_STEPS = [
+  { id:'welcome', kind:'welcome', title:'Welcome to Betsel Stack',
+    body:'This tour walks you through building your first pallet pattern, one step at a time — about 2 minutes.<br><br>Each step <b>highlights</b> part of the screen and tells you exactly what to do. Press <b>NEXT STEP</b> to move on.<br><br>You can stop any time with <b>✕</b>, <b>End tour</b> or the <b>Esc</b> key, and start it again from <b>Help → Tutorial Mode</b>.' },
+
+  // ── SETUP ──
+  { id:'project', section:'SETUP', kind:'info', side:'right',
+    target:()=>document.getElementById('rptProject').closest('.card'),
+    title:'Project details',
+    body:'The project name, description and notes are printed on your reports.',
+    todo:'Optional — type a project name, or leave it blank for now.' },
+
+  { id:'pallet', section:'SETUP', kind:'info', side:'right',
+    target:()=>document.getElementById('palBtns').parentElement,
+    title:'Pallet size',
+    body:'<b>Full (48×40")</b> is selected by default. Pick another standard size, or <b>Custom</b> to enter your own pallet.',
+    todo:'Click a pallet size if you need a different one.' },
+
+  { id:'limits', section:'SETUP', kind:'info', side:'right',
+    target:()=>document.getElementById('maxHI').closest('.card'),
+    title:'Load limits',
+    body:'<b>Edge offset</b>: blank = cases flush with the pallet edge, positive = overhang allowed, negative = keep cases back from the edge.<br><b>Max stack height</b>: the tallest the finished load can be. Blank = up to the trailer height.',
+    todo:'Optional — enter a max stack height, e.g. 52.' },
+
+  // ── CASE ──
+  { id:'csBtn', section:'CASE', kind:'click', side:'bottom', target:'#csBtn',
+    title:'Need a case size?',
+    body:'If you know your product but not your case, the <b>Case Size Calculator</b> designs case options for you.<br>Already have a case size? Use the link below to skip ahead.',
+    todo:'Click the <b>📦 CASE SIZE</b> button.',
+    done:()=>_tourCsOpen(),
+    links:[{ label:'Skip — I already have case dimensions', go:'case' }] },
+
+  { id:'csInput', section:'CASE', kind:'input', side:'left',
+    target:()=>_tourCsColumn('left'), avoid:[()=>_tourCsColumn('right')],
+    before:()=>{ if(!_tourCsOpen()) csOpen(); },
+    title:'Describe one item',
+    body:'Enter the size of <b>one item</b> that goes inside the case (for example, one clamshell), its weight, and how many go in a case.',
+    todo:'Fill in <b>L, W, H</b>, <b>UNIT WEIGHT</b> and <b>CASE COUNT</b>.',
+    status:()=>_tourCsHasResults()
+      ? { ok:true,  text:'✓ Case options are ready on the right' }
+      : { ok:false, text:'Case options appear as soon as all five boxes are filled in' },
+    gate:()=>_tourCsHasResults(), gateHint:'Fill in the boxes first',
+    links:[{ label:'Skip the calculator', run:()=>csClose(), go:'case' }],
+    lost:()=>_tourCsOpen() ? null : 'case' },
+
+  { id:'csResults', section:'CASE', kind:'click', side:'left',
+    target:()=>document.getElementById('csResults'), avoid:[()=>document.querySelector('#csCompareWrap')],
+    title:'Pick a case',
+    body:'Each row is a possible case: arrangement, outside size and weight. <b>COMPARE ON PALLET</b> (bottom left) shows which one fills the pallet best.',
+    todo:'Click a green <b>USE →</b> button to send that case to the builder.',
+    done:()=>!_tourCsOpen(),
+    onNext:()=>{ if(_tourCsOpen()) csClose(); },
+    lost:()=>(_tourCsOpen() || _tourHasCase()) ? null : 'case' },
+
+  { id:'case', section:'CASE', kind:'input', side:'right', target:'#caseList',
+    before:()=>{ if(_tourCsOpen()) csClose(); TOUR.t0 = Date.now(); },
+    title:'Case dimensions',
+    body:'These are the outside dimensions of your case. Pallet patterns are generated automatically from them.',
+    todo:'Type the case <b>L</b>, <b>W</b> and <b>H</b> (weight is optional), or use the sample case below.',
+    status:()=>{
+      if(!_tourHasCase()) return { ok:false, text:'NEXT STEP turns on once L, W and H are filled in' };
+      if(_tourHasPatterns()) return { ok:true, text:'✓ '+ST.patterns.length+' pallet patterns generated' };
+      if(Date.now() - TOUR.t0 < 3500) return { ok:true, text:'Generating patterns…' };
+      return { ok:true, warn:true, text:'⚠ No patterns yet — check the numbers. You can still continue.' };
+    },
+    gate:()=>_tourHasCase(), gateHint:'Enter L, W and H first',
+    links:[{ label:'Use a sample case (12 × 10 × 8 in)', run:()=>_tourSampleCase(), stay:true }] },
+
+  // ── PATTERNS ──
+  { id:'table', section:'PATTERNS', kind:'click', side:'top', target:'#tw', needs:'patterns',
+    before:()=>{ TOUR.flags.rowClicked = false; },
+    title:'Pattern list',
+    body:'Every row is a different pattern, ranked by <b>cases per layer (TI)</b>. Compare cubic efficiency, case support and stability side by side. The highlighted row is the one shown on screen.',
+    todo:'Click any row to view that pattern.',
+    done:()=>TOUR.flags.rowClicked },
+
+  { id:'editor', section:'PATTERNS', kind:'info', side:'bottom', target:'#ca', needs:'patterns',
+    before:()=>{ if(ST.view !== '2d') setView('2d'); },
+    title:'2D layer view',
+    body:'This is the selected pattern from above. You can <b>drag cases</b> to adjust it, and use the <b>Layer Editor</b> bar to add, delete or rotate cases. <b>✔ Save Pattern</b> keeps your edits as a new row.',
+    todo:'Optional — drag a case to try it.' },
+
+  { id:'btn3d', section:'PATTERNS', kind:'click', side:'bottom', target:'#v3d', needs:'patterns',
+    title:'Switch to 3D',
+    body:'See the whole unit load stacked on the pallet.',
+    todo:'Click the <b>3D</b> button.',
+    done:()=>ST.view === '3d',
+    onNext:()=>{ if(ST.view !== '3d') setView('3d'); } },
+
+  { id:'view3d', section:'PATTERNS', kind:'info', side:'bottom', target:'#ca', needs:'patterns',
+    before:()=>{ if(ST.view !== '3d') setView('3d'); },
+    title:'3D view',
+    body:'The readout at the bottom shows the finished load size. <b>TIGHT</b> and <b>INTERLOCK</b> (top bar) change how the cases pack.',
+    todo:'Drag on the pallet to rotate it; scroll to zoom.' },
+
+  // ── TRUCK ──
+  { id:'btnTruck', section:'TRUCK', kind:'click', side:'bottom', target:'#vtrk', needs:'patterns',
+    title:'Load a truck',
+    body:'See how many of these pallets fit in a trailer.',
+    todo:'Click the <b>🚛 TRUCK</b> button.',
+    done:()=>ST.view === 'truck',
+    onNext:()=>{ if(ST.view !== 'truck') setView('truck'); } },
+
+  { id:'trailer', section:'TRUCK', kind:'info', side:'right', needs:'patterns',
+    target:()=>document.querySelector('input[name=trkType]').closest('.card'),
+    before:()=>{ if(ST.view !== 'truck') setView('truck'); },
+    title:'Trailer settings',
+    body:'The truck view shows the pallet count and layout. Change the trailer type or switch between <b>Single</b> and <b>Double</b> stacking here, and the view updates right away.',
+    todo:'Optional — pick a different trailer to compare.' },
+
+  // ── REPORT ──
+  { id:'btnReport', section:'REPORT', kind:'click', side:'bottom', target:'#vrpt', needs:'patterns',
+    title:'Open the Report Builder',
+    body:'Turn this pattern into a report you can share with customers or your team.',
+    todo:'Click the <b>📋 REPORT</b> button.',
+    done:()=>ST.view === 'report',
+    onNext:()=>{ if(ST.view !== 'report') setView('report'); } },
+
+  { id:'layout', section:'REPORT', kind:'click', side:'bottom', needs:'patterns',
+    target:()=>document.querySelector('#rptToolbar .rbt'),
+    before:()=>{ if(ST.view !== 'report') setView('report'); },
+    title:'Start a report',
+    body:'Start from a ready-made layout, then drag extra blocks from the left onto the page if you want them.',
+    todo:'Click <b>📄 Standard Layout</b>.',
+    done:()=>typeof RB !== 'undefined' && RB.blocks && RB.blocks.length > 0 },
+
+  { id:'export', section:'REPORT', kind:'info', side:'bottom', needs:'patterns',
+    target:'#rptToolbar .rbt.export',
+    before:()=>{ if(ST.view !== 'report') setView('report'); },
+    title:'Export or save the report',
+    body:'<b>⬇ Export PDF</b> downloads the report. <b>☁ Save to Cloud</b> keeps it in your account so you can open it on your phone. Add your logo and colors under <b>Settings → Report Designer</b>.',
+    todo:'Click Export PDF whenever you\'re ready — or keep going.' },
+
+  // ── SAVE ──
+  { id:'save', section:'SAVE', kind:'info', side:'bottom',
+    target:()=>document.querySelector('#menubar .mnu-item .mnu-btn'),
+    title:'Save your project',
+    body:'<b>File → Save to cloud</b> keeps this project in your account. <b>File → Save</b> saves a file to your computer.',
+    todo:'Use the <b>File</b> menu to save when you\'re done.' },
+
+  { id:'finish', kind:'finish', title:'You\'re all set!',
+    body:'That\'s the whole flow: <b>case → patterns → 3D → truck → report</b>.<br><br>Want a refresher later? Turn the tour back on any time from <b>Help → Tutorial Mode</b>.' },
+];
+function _tourIdx(id){ return TOUR_STEPS.findIndex(s => s.id === id); }
+const _TOUR_COUNTED = TOUR_STEPS.filter(s => s.kind !== 'welcome' && s.kind !== 'finish');
+
+// ── Styles & DOM ──────────────────────────────────────────────
+function _tourBuildDOM(){
+  if(document.getElementById('tourTip')) return;
+  const css = document.createElement('style');
+  css.textContent = `
+#tourShade{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;pointer-events:none;display:none;}
+#tourSpot{position:fixed;z-index:9001;pointer-events:none;border:2px solid var(--go);border-radius:6px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 18px rgba(245,166,35,.55);display:none;
+  transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease;}
+#tourSpot.pulse{animation:tourPulse 1.4s ease-in-out infinite;}
+@keyframes tourPulse{0%,100%{box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 8px rgba(245,166,35,.4);}
+  50%{box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 28px rgba(245,166,35,1);}}
+#tourTip{position:fixed;z-index:9002;width:360px;max-width:calc(100vw - 24px);background:#1a1a1a;
+  border:1px solid var(--bd);border-top:3px solid var(--go);border-radius:6px;padding:0 16px 12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.7);font-family:'Rajdhani',sans-serif;color:var(--tx);display:none;}
+#tourTip.center{left:50%!important;top:50%!important;transform:translate(-50%,-50%);width:440px;}
+#tourTip .tt-hd{display:flex;align-items:center;gap:8px;padding:10px 0 4px;cursor:move;user-select:none;}
+#tourTip.center .tt-hd{cursor:default;}
+#tourTip .tt-step{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--go);letter-spacing:2px;flex:1;}
+#tourTip .tt-grip{font-size:12px;color:#555;letter-spacing:-2px;}
+#tourTip .tt-x{background:none;border:none;color:#888;font-size:22px;line-height:1;cursor:pointer;padding:0 2px;}
+#tourTip .tt-x:hover{color:#fff;}
+#tourTip h3{font-size:20px;font-weight:700;color:#fff;letter-spacing:.5px;margin-bottom:4px;}
+#tourTip .tt-body{font-size:15px;line-height:1.45;color:#d0d0d0;}
+#tourTip .tt-body b{color:#fff;}
+#tourTip .tt-do{margin-top:10px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.45);border-left:4px solid var(--go);
+  border-radius:4px;padding:8px 10px;}
+#tourTip .tt-do-lbl{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--go);margin-bottom:2px;}
+#tourTip .tt-do-txt{font-size:15.5px;line-height:1.4;color:#fff;font-weight:600;}
+#tourTip .tt-do-txt b{color:var(--go);}
+#tourTip .tt-st{margin-top:7px;font-family:'Share Tech Mono',monospace;font-size:11.5px;letter-spacing:.5px;color:#9aa4b0;}
+#tourTip .tt-st.ok{color:#5ec97a;}
+#tourTip .tt-st.warn{color:#f0b450;}
+#tourTip .tt-links{margin-top:8px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;}
+#tourTip .tt-link{background:none;border:none;color:#7ac8ff;font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;
+  padding:3px 0;letter-spacing:.3px;text-align:left;}
+#tourTip .tt-link:hover{color:#fff;text-decoration:underline;}
+#tourTip .tt-bar{height:3px;background:#333;border-radius:2px;margin:12px 0 10px;overflow:hidden;}
+#tourTip .tt-bar i{display:block;height:100%;background:var(--go);transition:width .25s;}
+#tourTip .tt-ft{display:flex;align-items:center;gap:6px;}
+#tourTip .tt-end{background:none;border:none;color:#999;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;
+  padding:4px 2px;letter-spacing:.5px;text-decoration:underline;text-underline-offset:2px;}
+#tourTip .tt-end:hover{color:var(--go);}
+#tourTip .tt-sp{flex:1;}
+#tourTip .tt-btn{background:#333;color:#ddd;border:1px solid var(--bd);border-radius:3px;padding:6px 12px;
+  font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
+#tourTip .tt-btn:hover{border-color:var(--go);color:var(--go);}
+#tourTip .tt-btn.pri{background:var(--go);color:#1a1a1a;border-color:var(--go);font-weight:bold;}
+#tourTip .tt-btn.pri:hover{background:var(--g2);color:#1a1a1a;}
+#tourTip .tt-btn.pri:disabled{background:#3a3a3a;color:#777;border-color:#4a4a4a;cursor:not-allowed;font-weight:normal;}
+#mnuTourState{font-size:10px;padding:1px 6px;border-radius:3px;margin-left:16px;letter-spacing:1px;}
+`;
+  document.head.appendChild(css);
+  const shade = document.createElement('div'); shade.id = 'tourShade';
+  const spot  = document.createElement('div'); spot.id  = 'tourSpot';
+  const tip   = document.createElement('div'); tip.id   = 'tourTip';
+  tip.setAttribute('role','dialog'); tip.setAttribute('aria-live','polite');
+  document.body.appendChild(shade); document.body.appendChild(spot); document.body.appendChild(tip);
+  // Pattern-row clicks (the table is re-rendered often, so listen on the body)
+  document.getElementById('tBd').addEventListener('click', ()=>{ TOUR.flags.rowClicked = true; });
+  // Drag the card by its top bar
+  tip.addEventListener('mousedown', e=>{
+    const hd = e.target.closest('.tt-hd');
+    if(!hd || e.target.closest('.tt-x') || tip.classList.contains('center')) return;
+    e.preventDefault();
+    const r = tip.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    const move = ev=>{
+      const x = Math.max(4, Math.min(window.innerWidth  - r.width  - 4, ev.clientX - dx));
+      const y = Math.max(4, Math.min(window.innerHeight - 40, ev.clientY - dy));
+      tip.style.left = x+'px'; tip.style.top = y+'px';
+      TOUR.manual = { idx: TOUR.idx, x, y };
+    };
+    const up = ()=>{ document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
+}
+
+// ── Persistence ───────────────────────────────────────────────
+function _tourState(){
+  if(!KBM_SETTINGS.tour || typeof KBM_SETTINGS.tour !== 'object') KBM_SETTINGS.tour = { seen:false, step:0, done:false };
+  return KBM_SETTINGS.tour;
+}
+async function _tourSaveCloud(){
+  // Quiet save (no toast) — same endpoint as the Settings dialog
+  try{
+    await fetch(SETTINGS_API, { method:'PUT', headers:{'Content-Type':'application/json'},
+      credentials:'same-origin', body: JSON.stringify({ data: KBM_SETTINGS }) });
+  }catch(e){ /* offline / loose file — local cache still has it */ }
+}
+function _tourPersist(toCloud){
+  _saveSettings();
+  if(toCloud) _tourSaveCloud();
+}
+
+// ── Menu ──────────────────────────────────────────────────────
+function _tourMenuRefresh(){
+  const s = document.getElementById('mnuTourState');
+  if(!s) return;
+  s.textContent = TOUR.active ? 'ON' : 'OFF';
+  s.style.background = TOUR.active ? 'var(--go)' : '#333';
+  s.style.color      = TOUR.active ? '#1a1a1a' : '#aaa';
+}
+function mnuTourToggle(){
+  mnuClose();
+  if(TOUR.active){ tourEnd(); return; }
+  const st = _tourState();
+  tourStart(st.done ? 1 : Math.max(1, st.step || 1));   // resume, or start over if finished
+}
+function mnuTourRestart(){ mnuClose(); tourStart(1); }
+
+// ── Engine ────────────────────────────────────────────────────
+function tourStart(i){
+  _tourBuildDOM();
+  mnuClose();
+  TOUR.active = true;
+  const st = _tourState();
+  st.seen = true; st.done = false;
+  _tourPersist(true);
+  _tourMenuRefresh();
+  _tourGo(i || 0, 1);
+  document.addEventListener('keydown', _tourKey, true);
+  window.addEventListener('resize', _tourPlace);
+  _tourTrack();
+}
+
+function tourEnd(finished){
+  if(!TOUR.active) return;
+  TOUR.active = false;
+  clearInterval(TOUR.pollT); TOUR.pollT = null;
+  cancelAnimationFrame(TOUR.rafT); TOUR.rafT = null;
+  ['tourShade','tourSpot','tourTip'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  document.removeEventListener('keydown', _tourKey, true);
+  window.removeEventListener('resize', _tourPlace);
+  const st = _tourState();
+  st.seen = true;
+  if(finished){ st.done = true; st.step = 0; } else { st.step = TOUR.idx; }
+  _tourPersist(true);
+  _tourMenuRefresh();
+  if(!finished && typeof _showNotification === 'function')
+    _showNotification('Tour closed — turn it back on any time from Help → Tutorial Mode', false);
+}
+
+function _tourKey(e){
+  if(TOUR.active && e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); tourEnd(); }
+}
+
+function _tourGo(i, dir){
+  dir = dir || 1;
+  i = Math.max(0, Math.min(TOUR_STEPS.length-1, i));
+  // Steps that need a pattern are skipped when there isn't one
+  while(TOUR_STEPS[i].needs === 'patterns' && !_tourHasPatterns()){
+    i += dir;
+    if(i <= 0 || i >= TOUR_STEPS.length-1) break;
+  }
+  const s = TOUR_STEPS[i];
+  TOUR.idx = i;
+  TOUR.manual = null;
+  TOUR.sig = '';
+  TOUR.advancing = false;
+  try{ if(s.before) s.before(); }catch(e){ console.warn('[tour] before() failed', e); }
+  // A click step that's already satisfied when it opens doesn't jump ahead —
+  // it shows "✓ done" and waits for NEXT STEP (so BACK never bounces forward).
+  TOUR.wasDone = s.kind === 'click' && _tourSafe(s.done);
+  const st = _tourState(); st.step = i; _tourPersist(false);
+  _tourRender();
+  clearInterval(TOUR.pollT);
+  TOUR.pollT = setInterval(_tourPoll, 300);
+}
+function _tourSafe(fn){ try{ return !!(fn && fn()); }catch(e){ return false; } }
+
+function _tourNext(){
+  const s = TOUR_STEPS[TOUR.idx];
+  if(s.kind === 'input' && s.gate && !_tourSafe(s.gate)) return;
+  try{ if(s.onNext) s.onNext(); }catch(e){ console.warn('[tour] onNext failed', e); }
+  if(TOUR.idx >= TOUR_STEPS.length-1){ tourEnd(true); return; }
+  _tourGo(TOUR.idx + 1, 1);
+}
+function _tourBack(){ _tourGo(Math.max(1, TOUR.idx - 1), -1); }
+function _tourLink(k){
+  const s = TOUR_STEPS[TOUR.idx], l = s.links && s.links[k];
+  if(!l) return;
+  try{ if(l.run) l.run(); }catch(e){ console.warn('[tour] link failed', e); }
+  if(l.go) _tourGo(_tourIdx(l.go), 1);
+  else if(!l.stay) _tourNext();
+  else _tourRefresh(true);
+}
+
+function _tourPoll(){
+  if(!TOUR.active) return;
+  const s = TOUR_STEPS[TOUR.idx];
+  if(s.lost){
+    const to = s.lost();
+    if(to){ _tourGo(_tourIdx(to), 1); return; }
+  }
+  if(s.kind === 'click' && !TOUR.wasDone && !TOUR.advancing && _tourSafe(s.done)){
+    TOUR.advancing = true;
+    _tourRefresh(true);
+    setTimeout(()=>{ if(TOUR.active && TOUR_STEPS[TOUR.idx] === s){ _tourGo(TOUR.idx + 1, 1); } }, 800);
+    return;
+  }
+  _tourRefresh(false);
+}
+
+// Live part of the card: status line + NEXT STEP enabled/disabled
+function _tourLive(s){
+  let st = null, nextOn = true, hint = '';
+  if(s.kind === 'click'){
+    st = (TOUR.wasDone || TOUR.advancing || _tourSafe(s.done))
+      ? { ok:true, text: TOUR.advancing ? '✓ Done — moving on…' : '✓ Already done — press NEXT STEP' }
+      : { ok:false, text:'Waiting for your click… (or press NEXT STEP)' };
+  } else if(s.kind === 'input'){
+    try{ st = s.status ? s.status() : null; }catch(e){ st = null; }
+    if(s.gate){ nextOn = _tourSafe(s.gate); hint = nextOn ? '' : (s.gateHint || ''); }
+  }
+  return { st, nextOn, hint };
+}
+function _tourRefresh(force){
+  const tip = document.getElementById('tourTip');
+  if(!tip || !TOUR.active) return;
+  const s = TOUR_STEPS[TOUR.idx];
+  const L = _tourLive(s);
+  const sig = JSON.stringify(L);
+  if(!force && sig === TOUR.sig) return;
+  TOUR.sig = sig;
+  const stEl = tip.querySelector('.tt-st');
+  if(stEl){
+    stEl.textContent = L.st ? L.st.text : '';
+    stEl.className = 'tt-st' + (L.st && L.st.ok ? (L.st.warn ? ' warn' : ' ok') : '');
+  }
+  const nb = tip.querySelector('.tt-next');
+  if(nb){ nb.disabled = !L.nextOn; nb.title = L.hint; }
+  const spot = document.getElementById('tourSpot');
+  if(spot) spot.classList.toggle('pulse', s.kind === 'click' && !(TOUR.wasDone || TOUR.advancing));
+}
+
+function _tourRender(){
+  const s = TOUR_STEPS[TOUR.idx];
+  const tip = document.getElementById('tourTip');
+  const total = _TOUR_COUNTED.length;
+  const n = _TOUR_COUNTED.indexOf(s) + 1;
+  const pct = s.kind === 'finish' ? 100 : s.kind === 'welcome' ? 0 : Math.round(n/total*100);
+  const head = s.kind === 'welcome' ? 'TUTORIAL' : s.kind === 'finish' ? 'TOUR COMPLETE' : 'STEP '+n+' OF '+total+(s.section ? ' · '+s.section : '');
+  let todo = '', links = '', foot = '';
+  if(s.todo){
+    todo = `<div class="tt-do"><div class="tt-do-lbl">👉 DO THIS</div><div class="tt-do-txt">${s.todo}</div>
+            ${(s.kind === 'click' || s.kind === 'input') ? '<div class="tt-st"></div>' : ''}</div>`;
+  }
+  if(s.links && s.links.length){
+    links = '<div class="tt-links">' + s.links.map((l,k)=>`<button class="tt-link" onclick="_tourLink(${k})">→ ${l.label}</button>`).join('') + '</div>';
+  }
+  if(s.kind === 'welcome'){
+    foot = `<button class="tt-end" onclick="tourEnd()">Not now</button><span class="tt-sp"></span>
+            <button class="tt-btn pri" onclick="_tourNext()">START TOUR →</button>`;
+  } else if(s.kind === 'finish'){
+    foot = `<button class="tt-btn" onclick="_tourBack()">← BACK</button><span class="tt-sp"></span>
+            <button class="tt-btn pri" onclick="tourEnd(true)">FINISH ✓</button>`;
+  } else {
+    const back = n > 1 ? `<button class="tt-btn" onclick="_tourBack()">← BACK</button>` : '';
+    foot = `<button class="tt-end" onclick="tourEnd()">End tour</button><span class="tt-sp"></span>${back}
+            <button class="tt-btn pri tt-next" onclick="_tourNext()">NEXT STEP →</button>`;
+  }
+  tip.innerHTML = `
+    <div class="tt-hd" title="${s.kind==='welcome'||s.kind==='finish' ? '' : 'Drag to move this card'}">
+      ${s.kind==='welcome'||s.kind==='finish' ? '' : '<span class="tt-grip">⋮⋮</span>'}
+      <span class="tt-step">${head}</span>
+      <button class="tt-x" title="End tour (Esc)" aria-label="End tour" onclick="tourEnd(${s.kind==='finish'?'true':''})">&times;</button></div>
+    <h3>${s.title}</h3>
+    <div class="tt-body">${s.body}</div>
+    ${todo}${links}
+    <div class="tt-bar"><i style="width:${pct}%"></i></div>
+    <div class="tt-ft">${foot}</div>`;
+  tip.style.display = 'block';
+  TOUR.lastRect = '';
+  _tourRefresh(true);
+  _tourPlace();
+}
+
+// ── Placement: next to the target, without covering it or the
+//    elements listed in `avoid`; falls back to the least-bad spot ──
+function _tourOverlap(a, b){
+  const w = Math.min(a.r, b.r) - Math.max(a.l, b.l), h = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+  return (w > 0 && h > 0) ? w*h : 0;
+}
+function _tourPlace(){
+  if(!TOUR.active) return;
+  const s = TOUR_STEPS[TOUR.idx];
+  const tip = document.getElementById('tourTip');
+  const spot = document.getElementById('tourSpot');
+  const shade = document.getElementById('tourShade');
+  const el = _tourEl(s.target);
+  if(!s.target || !_tourVisible(el)){
+    spot.style.display = 'none';
+    shade.style.display = 'block';
+    tip.classList.add('center');
+    tip.style.left = tip.style.top = '';
+    return;
+  }
+  shade.style.display = 'none';
+  tip.classList.remove('center');
+  const r = el.getBoundingClientRect();
+  const pad = 6, vw = window.innerWidth, vh = window.innerHeight;
+  const L = Math.max(2, r.left-pad), T = Math.max(2, r.top-pad);
+  const W = Math.min(vw-4, r.right+pad) - L, H = Math.min(vh-4, r.bottom+pad) - T;
+  spot.style.display = 'block';
+  spot.style.left = L+'px'; spot.style.top = T+'px';
+  spot.style.width = W+'px'; spot.style.height = H+'px';
+  if(TOUR.manual && TOUR.manual.idx === TOUR.idx){
+    tip.style.left = TOUR.manual.x+'px'; tip.style.top = TOUR.manual.y+'px'; return;
+  }
+  const tw = tip.offsetWidth, th = tip.offsetHeight, g = 14, m = 12;
+  const clampX = x => Math.max(m, Math.min(vw-tw-m, x));
+  const clampY = y => Math.max(m, Math.min(vh-th-m, y));
+  const tgt = { l:L, t:T, r:L+W, b:T+H };
+  const avoid = (s.avoid||[]).map(a=>_tourEl(a)).filter(_tourVisible).map(e=>{ const q=e.getBoundingClientRect(); return {l:q.left,t:q.top,r:q.right,b:q.bottom}; });
+  const pref = s.side || 'bottom';
+  const cands = [
+    { k:'right',  x:L+W+g,   y:T },
+    { k:'left',   x:L-tw-g,  y:T },
+    { k:'bottom', x:L,       y:T+H+g },
+    { k:'top',    x:L,       y:T-th-g },
+    { k:'c-br',   x:vw-tw-m, y:vh-th-m },
+    { k:'c-bl',   x:m,       y:vh-th-m },
+    { k:'c-tr',   x:vw-tw-m, y:m },
+    { k:'c-tl',   x:m,       y:m },
+  ];
+  let best = null;
+  cands.forEach(c=>{
+    const x = clampX(c.x), y = clampY(c.y);
+    const box = { l:x, t:y, r:x+tw, b:y+th };
+    let score = _tourOverlap(box, tgt) * 4;
+    avoid.forEach(a=>{ score += _tourOverlap(box, a) * 3; });
+    score += (c.k === pref ? 0 : c.k.startsWith('c-') ? 900 : 300);   // prefer the chosen side, then any side, then corners
+    if(!best || score < best.score) best = { x, y, score };
+  });
+  tip.style.left = best.x+'px'; tip.style.top = best.y+'px';
+}
+
+function _tourTrack(){
+  // Follow the target as panels scroll, resize or re-render
+  cancelAnimationFrame(TOUR.rafT);
+  const loop = ()=>{
+    if(!TOUR.active) return;
+    const s = TOUR_STEPS[TOUR.idx];
+    const el = _tourEl(s.target);
+    let key = 'none';
+    if(el){ const r = el.getBoundingClientRect(); key = [r.left,r.top,r.width,r.height].map(Math.round).join(','); }
+    (s.avoid||[]).forEach(a=>{ const e=_tourEl(a); if(e){ const r=e.getBoundingClientRect(); key += ';'+[r.left,r.top,r.width,r.height].map(Math.round).join(','); } });
+    key += '|' + window.innerWidth + 'x' + window.innerHeight;
+    if(key !== TOUR.lastRect){ TOUR.lastRect = key; _tourPlace(); }
+    TOUR.rafT = requestAnimationFrame(loop);
+  };
+  TOUR.rafT = requestAnimationFrame(loop);
+}
+
+// ── First-time prompt ─────────────────────────────────────────
+// Waits for the account settings to load so a user who already saw the
+// tour on another device isn't asked again. Users who already had saved
+// settings before Tutorial Mode existed are treated as returning users.
+function _tourAutoStart(){
+  _tourBuildDOM();
+  _tourMenuRefresh();
+  const st = _tourState();
+  if(st.seen) return;
+  if(window._bsReturningUser){ st.seen = true; _tourPersist(true); return; }
+  if(document.getElementById('kbmOverlay').classList.contains('open') || _tourCsOpen()) return;
+  tourStart(0);
+}
+(_settingsReady || Promise.resolve()).finally(()=> setTimeout(_tourAutoStart, 900));
+
 </script>
 </body>
 </html>
