@@ -18,7 +18,7 @@ const GROUPS = [
         a: [
           "Start with the pallet footprint and the case footprint, then divide the usable pallet area by the case area to find the theoretical maximum cases per layer. That number is an upper bound, not an answer \u2014 real layouts rarely reach it, because cases are rigid rectangles that leave unusable gaps.",
           "The practical calculation depends on how cases are oriented and arranged. A single case size can be placed lengthwise or crosswise, and layers can be built as column stacks, block patterns, brick patterns, or pinwheels \u2014 each producing a different count and a different stability profile. Overhang allowance, layer interlocking, and the maximum load height your operation permits all change the result.",
-          "Because the combinations multiply quickly, the reliable method is to generate every viable arrangement and rank them, rather than working a single layout by hand. Betsel Stack produces dozens of ranked patterns from your case and pallet dimensions in seconds.",
+          "Because the combinations multiply quickly, the reliable method is to generate every viable arrangement and rank them, rather than working a single layout by hand. Betsel Stack generates and ranks the viable patterns from your case and pallet dimensions in seconds.",
         ],
       },
       {

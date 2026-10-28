@@ -210,7 +210,7 @@ export default function SoftwarePage() {
               <li>
                 <div className="n">02</div>
                 <h3>Pick a pattern</h3>
-                <p>Get 50+ ranked layouts in seconds. Choose the best one.</p>
+                <p>Layouts ranked by efficiency, support, and stability. Choose the best one.</p>
                 <span className="arrow">→</span>
               </li>
               <li>
@@ -266,10 +266,10 @@ export default function SoftwarePage() {
               <article className="dive">
                 <div className="dive-copy">
                   <span className="tag">Pattern Engine</span>
-                  <h3>50+ optimized patterns, instantly</h3>
+                  <h3>The best pattern for your case, first</h3>
                   <p className="body">
                     Enter your case and pallet dimensions and Betsel Stack instantly
-                    generates dozens of layouts — each ranked by cubic efficiency, case
+                    generates ranked layouts — each scored by cubic efficiency, case
                     support, and stability. You start from the best option, not a blank
                     screen.
                   </p>
@@ -280,7 +280,7 @@ export default function SoftwarePage() {
                   </div>
                 </div>
                 <div className="dive-media">
-                  <img src="/screenshots/builder.jpg" alt="50+ optimized patterns, instantly" />
+                  <img src="/screenshots/builder.jpg" alt="Ranked pallet patterns with the best layout first" />
                 </div>
               </article>
 

@@ -34,7 +34,7 @@ const PILLARS = [
     n: "02",
     title: "Give engineers their time back",
     body: "No repetitive calculations, hand-drawn layouts, spreadsheet work, or avoidable rework.",
-    proof: "50+ patterns scored in seconds",
+    proof: "Ti-Hi, overhang & stability, calculated for you",
   },
   {
     n: "03",
@@ -54,7 +54,7 @@ const CHAPTERS = [
   {
     tag: "Pattern engine",
     title: ["Start from the best pattern.", "Not a blank screen."],
-    body: "Enter a case and a pallet. Betsel Stack does the repetitive math and returns 50+ layouts, ranked by cubic efficiency, case support, and stability.",
+    body: "Enter a case and a pallet. Betsel Stack does the repetitive math and puts the strongest layout at the top, ranked by cubic efficiency, case support, and stability.",
     img: "/screenshots/builder.jpg",
     alt: "Pallet Pattern Builder showing a ranked pattern list and a 3D unit load",
   },
@@ -146,7 +146,7 @@ export default function HomePage() {
       <section className="hm-proof">
         <div className="container hm-proof-grid">
           <div className="rv"><b>Seconds</b><span>from case size to ranked patterns</span></div>
-          <div className="rv"><b>50+</b><span>patterns scored for every case</span></div>
+          <div className="rv"><b>1 click</b><span>to a branded, customer-ready report</span></div>
           <div className="rv"><b>0</b><span>software to install</span></div>
           <div className="rv"><b>$29</b><span>a month, or $279 a year</span></div>
         </div>

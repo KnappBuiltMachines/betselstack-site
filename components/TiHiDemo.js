@@ -5,7 +5,7 @@
 // block layer instantly, drawn to scale. This is a deliberately small
 // guillotine-block solver (up to 3 cuts) so it runs in a few milliseconds
 // in the browser. The real engine (interlock, pinwheel, overhang, mixed
-// cases, 50+ ranked patterns) lives behind the free trial.
+// cases, ranked patterns) lives behind the free trial.
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -208,8 +208,8 @@ export default function TiHiDemo() {
           <div><b>{r.err ? "—" : Math.round(r.fp * 100) + "%"}</b><span>Footprint used</span></div>
         </div>
         <p className="td-note">
-          This quick check uses a simple block layout. The full app ranks 50+
-          patterns, including interlocked layers, overhang, mixed cases, and
+          This quick check uses a simple block layout. The full app ranks every
+          viable pattern, including interlocked layers, overhang, mixed cases, and
           trailer loading.
         </p>
         <Link href="/signup" className="btn btn--primary">
