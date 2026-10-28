@@ -5,7 +5,7 @@
 
 import { ImageResponse } from "next/og";
 
-export const alt = "Betsel Stack — Fit more on every pallet. Ship fewer trucks.";
+export const alt = "Betsel Stack — Powerful packaging engineering, made practical.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -53,11 +53,11 @@ export default function Image() {
           <div style={{ fontSize: 30, fontWeight: 700, display: "flex" }}>
             Bet<span style={{ color: "#fdb410" }}>sel</span>&nbsp;Stack
           </div>
-          <div style={{ fontSize: 76, fontWeight: 800, lineHeight: 1.02, letterSpacing: -2, marginTop: 70 }}>
-            Fit more on every pallet.
+          <div style={{ fontSize: 70, fontWeight: 800, lineHeight: 1.04, letterSpacing: -2, marginTop: 64 }}>
+            Powerful packaging engineering.
           </div>
-          <div style={{ fontSize: 76, fontWeight: 800, lineHeight: 1.02, letterSpacing: -2, color: "#fdb410" }}>
-            Ship fewer trucks.
+          <div style={{ fontSize: 70, fontWeight: 800, lineHeight: 1.04, letterSpacing: -2, color: "#fdb410" }}>
+            Made practical.
           </div>
           <div style={{ fontSize: 28, color: "#9aa1ab", marginTop: 34 }}>
             Pallet pattern software in your browser · 7-day free trial

@@ -141,6 +141,7 @@ const GROUPS = [
         a: [
           "Packaging engineers and the teams around them \u2014 food and agricultural processing, co-packing, consumer goods manufacturing, distribution centers, and logistics groups who need to answer palletization questions accurately and document the answer.",
           "It was built by people working in packaging, automation, warehousing, and transportation, which is why it is organized around the questions those roles actually have to answer rather than around a generic optimization engine.",
+          "The goal is simple: powerful packaging engineering, made practical. Betsel Stack is focused by design, with no unnecessary features, lengthy onboarding, or enterprise-level complexity, so engineers spend less time on repetitive calculations and spreadsheets and more time on high-value problems.",
         ],
       },
     ],

@@ -11,7 +11,7 @@
 //   plays while it is on screen (Apple-style), and stays still for
 //   visitors who prefer reduced motion.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function RevealObserver() {
   useEffect(() => {
@@ -42,36 +42,86 @@ export function RevealObserver() {
   return null;
 }
 
-export function LoopVideo({ src, poster, label }) {
+//   eager   — start downloading right away (use for the hero clip that is
+//             on screen at page load).
+//   control — show a small pause / play button over the clip. Visitors who
+//             prefer reduced motion see the poster and can press play.
+export function LoopVideo({ src, poster, label, eager = false, control = false }) {
   const ref = useRef(null);
+  const userPaused = useRef(false);
+  const [playing, setPlaying] = useState(false);
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
+    if (reduce) {
+      userPaused.current = true;
+      return;
+    }
     const io = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) {
           if (!v.getAttribute("src")) v.setAttribute("src", src);
-          v.play().catch(() => {});
+          if (!userPaused.current) v.play().catch(() => {});
         } else {
           v.pause();
         }
       },
-      { threshold: 0.3 }
+      { threshold: eager ? 0.01 : 0.3 }
     );
     io.observe(v);
     return () => io.disconnect();
-  }, [src]);
-  return (
+  }, [src, eager]);
+
+  function toggle() {
+    const v = ref.current;
+    if (!v) return;
+    if (v.paused) {
+      userPaused.current = false;
+      if (!v.getAttribute("src")) v.setAttribute("src", src);
+      v.play().catch(() => {});
+    } else {
+      userPaused.current = true;
+      v.pause();
+    }
+  }
+
+  const video = (
     <video
       ref={ref}
       poster={poster}
       muted
       loop
       playsInline
-      preload="none"
+      preload={eager ? "auto" : "none"}
       aria-label={label}
+      onPlay={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
     />
+  );
+
+  if (!control) return video;
+  return (
+    <div className="lv">
+      {video}
+      <button
+        type="button"
+        className="lv-btn"
+        onClick={toggle}
+        aria-label={playing ? "Pause video" : "Play video"}
+      >
+        {playing ? (
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <rect x="2" y="1.5" width="3.4" height="11" rx="1" fill="currentColor" />
+            <rect x="8.6" y="1.5" width="3.4" height="11" rx="1" fill="currentColor" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M3 1.6v10.8a.6.6 0 0 0 .9.5l8.6-5.4a.6.6 0 0 0 0-1L3.9 1.1a.6.6 0 0 0-.9.5Z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+    </div>
   );
 }

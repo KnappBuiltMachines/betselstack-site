@@ -548,6 +548,7 @@ p { margin: 0; }
   border-bottom: 1px solid var(--line-soft);
 }
 .footer-blurb { color: var(--muted); font-size: 14.5px; max-width: 52ch; margin-top: 16px; }
+.footer-motto { color: var(--text); font-family: var(--display); font-weight: 600; border-left: 3px solid var(--amber); padding-left: 12px; margin-top: 18px; }
 .footer-nav {
   display: flex;
   flex-wrap: wrap;

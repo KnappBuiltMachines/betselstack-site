@@ -9,11 +9,13 @@ export default function SiteFooter() {
               <span>Bet<span className="brand-amber">sel</span> Stack</span>
             </span>
             <p className="footer-blurb">
-              Betsel Stack&trade; is advanced pallet pattern creation software
-              built to help packaging engineers develop optimized pallet
-              configurations faster. Create standard and mixed-case patterns,
-              place multiple case sizes on one pallet, customize footprints, and
-              optimize trailer loading &mdash; all in one engineering-focused tool.
+              Powerful packaging engineering &mdash; made practical. Betsel
+              Stack&trade; turns real-world palletization challenges into clear,
+              manageable workflows, so packaging engineers spend less time on
+              manual work and more time solving high-value problems.
+            </p>
+            <p className="footer-blurb footer-motto">
+              Focused by design. Powerful where it matters.
             </p>
           </div>
           <nav className="footer-nav" aria-label="Footer">

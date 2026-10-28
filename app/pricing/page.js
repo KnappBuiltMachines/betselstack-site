@@ -57,9 +57,10 @@ export default function PricingPage() {
               Try it free for <span className="accent">7 days</span>
             </h1>
             <p className="lead">
-              Start with a 7-day free trial &mdash; no credit card required
-              &mdash; or subscribe now and jump straight in. Pay monthly, or pay
-              for the year up front and save 20%.
+              Powerful tools shouldn&rsquo;t come with enterprise pricing. One
+              plan with everything included: start with a 7-day free trial
+              &mdash; no credit card required &mdash; or subscribe now and jump
+              straight in. Pay monthly, or pay for the year up front and save 20%.
             </p>
           </div>
           <div className="pallet-wrap">

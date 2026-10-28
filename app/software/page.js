@@ -155,15 +155,17 @@ export default function SoftwarePage() {
             <div className="eyebrow">Betsel Stack™</div>
             <h1>The Pallet Pattern Creator</h1>
             <p className="lede">
-              A standalone software product built to close a real gap for packaging
-              engineers — one tool for patterns, layers, mixed-case loads, trailer
-              planning, and engineering reports.
+              Powerful packaging engineering, made practical. One focused tool for
+              patterns, layers, mixed-case loads, trailer planning, and engineering
+              reports, built so engineers spend less time on manual work and more time
+              on high-value problems.
             </p>
             <p className="lede">
               Betsel Stack™ goes far beyond traditional Ti-Hi calculations. Build
               complex mixed-case pallet patterns, place multiple case sizes on a single
               pallet, customize footprints from quarter pallets to fully custom sizes,
-              and optimize trailer loading across multiple trailer types.
+              and optimize trailer loading across multiple trailer types, without
+              lengthy onboarding or enterprise-level complexity.
             </p>
             <div className="cta-row">
               <a className="btn btn-primary" href="/signup">Start 7-day free trial →</a>
@@ -232,7 +234,11 @@ export default function SoftwarePage() {
           <div className="wrap">
             <div className="sec-head">
               <div className="eyebrow">In the toolkit</div>
-              <h2>Everything in one engineering tool</h2>
+              <h2>Focused by design. Powerful where it matters.</h2>
+              <p>
+                Every tool is grounded in how packaging is actually designed,
+                manufactured, warehoused, and shipped. Nothing you won&rsquo;t use.
+              </p>
             </div>
             <div className="grid">
               <div className="card"><h4>Deeper customization</h4><p>Build patterns the way your spec demands, not the way a template forces.</p></div>
@@ -268,8 +274,9 @@ export default function SoftwarePage() {
                     screen.
                   </p>
                   <div className="why">
-                    <b>Why it matters —</b> Stop guessing at Ti-Hi. See the most
-                    efficient, most stable pattern for your exact case in seconds.
+                    <b>Gives you time back —</b> No repetitive Ti-Hi math or manual
+                    layouts. See the most efficient, most stable pattern for your exact
+                    case in seconds.
                   </div>
                 </div>
                 <div className="dive-media">
@@ -287,8 +294,8 @@ export default function SoftwarePage() {
                     dimensions called out.
                   </p>
                   <div className="why">
-                    <b>Why it matters —</b> Gives your crew a clear, repeatable build map
-                    and fewer mistakes on the floor.
+                    <b>Simplifies complexity —</b> Gives your crew a clear, repeatable
+                    build map, with fewer mistakes and less rework on the floor.
                   </div>
                 </div>
                 <div className="dive-media">
@@ -305,8 +312,8 @@ export default function SoftwarePage() {
                     layer by layer, and see the finished unit load rendered in full 3D.
                   </p>
                   <div className="why">
-                    <b>Why it matters —</b> Build and document accurate mixed loads that
-                    match what actually ships.
+                    <b>Built for real-world packaging —</b> Build and document accurate
+                    mixed loads that match what actually ships.
                   </div>
                 </div>
                 <div className="dive-media">
@@ -324,8 +331,8 @@ export default function SoftwarePage() {
                     balance check.
                   </p>
                   <div className="why">
-                    <b>Why it matters —</b> Maximize every trailer and cut freight cost
-                    per unit shipped.
+                    <b>Built for real-world packaging —</b> Maximize every trailer and
+                    cut freight cost per unit shipped.
                   </div>
                 </div>
                 <div className="dive-media">
@@ -345,8 +352,9 @@ export default function SoftwarePage() {
                     meet your company&rsquo;s standards and ready to print, email, or save.
                   </p>
                   <div className="why">
-                    <b>Why it matters —</b> Look professional, keep specs on file, and give
-                    every job a documented paper trail.
+                    <b>Gives you time back —</b> No retyping numbers into spreadsheets.
+                    Look professional, keep specs on file, and give every job a
+                    documented paper trail.
                   </div>
                 </div>
               </article>
@@ -361,8 +369,8 @@ export default function SoftwarePage() {
               <div className="eyebrow">Get started</div>
               <h2>Start your 7-day free trial</h2>
               <p>
-                Full access to the Pallet Pattern Creator — no credit card required. Add a
-                card whenever you are ready to keep going.
+                Full access to the Pallet Pattern Creator — no credit card, no install,
+                no onboarding call. Add a card whenever you are ready to keep going.
               </p>
               <div className="cta-row">
                 <a className="btn btn-primary" href="/signup">Start free trial</a>

@@ -53,7 +53,8 @@ export default function SignupPage() {
         <h1>Create your account</h1>
         <p className="sub">
           Get started with Betsel Stack&trade; &mdash; the Pallet Pattern
-          Creator. Start a free trial, or subscribe right after signing up.
+          Creator. No install and no onboarding call: start a free trial, or
+          subscribe right after signing up.
         </p>
 
         {done ? (

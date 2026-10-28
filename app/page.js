@@ -1,37 +1,67 @@
-// app/page.js — Betsel Stack home page (showcase redesign, Oct 2026)
-// Replaces the ENTIRE contents of app/page.js.
-// Needs these new files next to it:
+// app/page.js — Betsel Stack home page
+// Oct 2026: brand positioning pass ("Powerful packaging engineering — made
+// practical.") + looping product video in the hero.
+// Uses:
 //   app/home.css
-//   components/HeroPallet.js
 //   components/TiHiDemo.js
-//   components/HomeMotion.js
-// Uses the screenshots in /public/screenshots/.
+//   components/HomeMotion.js   (RevealObserver, LoopVideo)
+//   components/Testimonial.js
+//   /public/betsel-home-loop.mp4 + /public/betsel-home-loop-poster.jpg
+//   /public/screenshots/*.jpg
 
 import Link from "next/link";
 import "./home.css";
-import HeroPallet from "@/components/HeroPallet";
 import TiHiDemo from "@/components/TiHiDemo";
 import Testimonial from "@/components/Testimonial";
-import { RevealObserver } from "@/components/HomeMotion";
+import { RevealObserver, LoopVideo } from "@/components/HomeMotion";
 
 export const metadata = {
-  title: { absolute: "Betsel Stack™ — Pallet Pattern Software in Your Browser" },
+  title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
   description:
-    "Fit more on every pallet. Betsel Stack ranks the best pallet patterns for your case in seconds, shows the load in 3D, and plans the trailer — right in your browser. $29/month, 7-day free trial, no card.",
+    "Pallet pattern software for packaging engineers. Betsel Stack turns real-world palletization problems into clear workflows: ranked patterns in seconds, 3D load checks, trailer planning, and branded reports, right in your browser. $29/month, 7-day free trial, no card.",
 };
+
+// The four things the brand promises, each backed by something the product
+// actually does.
+const PILLARS = [
+  {
+    n: "01",
+    title: "Simplify complexity",
+    body: "Hard engineering questions become a few clear steps that feel approachable, even on your first day with the software.",
+    proof: "Case in. Ranked patterns out.",
+  },
+  {
+    n: "02",
+    title: "Give engineers their time back",
+    body: "No repetitive calculations, hand-drawn layouts, spreadsheet work, or avoidable rework.",
+    proof: "50+ patterns scored in seconds",
+  },
+  {
+    n: "03",
+    title: "Built for real-world packaging",
+    body: "Every tool is grounded in how packaging is designed, manufactured, warehoused, and shipped.",
+    proof: "Flutes · GMA & block pallets · 53′ reefers",
+  },
+  {
+    n: "04",
+    title: "Powerful tools, made accessible",
+    body: "Focused software without unnecessary features, lengthy onboarding, or enterprise-level complexity.",
+    proof: "Runs in your browser · $29/month",
+  },
+];
 
 const CHAPTERS = [
   {
     tag: "Pattern engine",
     title: ["Start from the best pattern.", "Not a blank screen."],
-    body: "Enter a case and a pallet. Betsel Stack returns 50+ layouts, ranked by cubic efficiency, case support, and stability.",
+    body: "Enter a case and a pallet. Betsel Stack does the repetitive math and returns 50+ layouts, ranked by cubic efficiency, case support, and stability.",
     img: "/screenshots/builder.jpg",
     alt: "Pallet Pattern Builder showing a ranked pattern list and a 3D unit load",
   },
   {
     tag: "Layer planning",
     title: ["Every layer,", "called out."],
-    body: "Step through the load one layer at a time, interlocked or alternating, with every case placed and turned exactly as it ships.",
+    body: "Step through the load one layer at a time, interlocked or alternating, with every case placed and turned exactly as it ships. A build map your floor can follow, with less rework.",
     img: "/screenshots/layers-2d.jpg",
     alt: "Layer-by-layer 2D build map with case placement",
   },
@@ -54,9 +84,9 @@ const CHAPTERS = [
 ];
 
 const NOS = [
-  ["No install.", "It runs in your browser, on a Mac or a PC."],
-  ["No license keys.", "Sign in from any computer and your patterns are there."],
+  ["No install.", "It runs in your browser on a Mac or a PC. Sign in anywhere and your patterns are there."],
   ["No IT ticket.", "Nothing to download, so nothing to approve."],
+  ["No lengthy onboarding.", "If you know your case and your pallet, you already know where to start."],
   ["No sales call.", "Start a full 7-day trial yourself. No card required."],
 ];
 
@@ -66,17 +96,19 @@ export default function HomePage() {
       <RevealObserver />
 
       {/* ============ HERO ============ */}
-      <section className="hm-hero">
+      <section className="hm-hero hm-hero--split">
         <div className="hm-floor" aria-hidden="true" />
-        <div className="container hm-hero-inner">
-          <p className="hm-kicker rv">Betsel Stack&trade; Pallet Pattern Creator</p>
+        <div className="container hm-hero-grid">
+        <div className="hm-hero-inner">
+          <p className="hm-kicker rv">Betsel Stack&trade; &middot; Pallet pattern software for packaging engineers</p>
           <h1 className="hm-display rv">
-            Fit more on every pallet.
-            <span className="hm-dim">Ship fewer trucks.</span>
+            Powerful packaging engineering.
+            <span className="hm-dim">Made practical.</span>
           </h1>
           <p className="hm-sub rv">
-            The best pallet patterns for your case, ranked in seconds. Checked
-            in 3D. Loaded into the trailer. All in your browser.
+            Betsel Stack turns real-world palletization problems into clear,
+            manageable workflows, so you spend less time on manual layouts and
+            more time on the problems that matter.
           </p>
           <div className="hm-actions rv">
             <Link href="/signup" className="btn btn--primary hm-btn-lg">
@@ -89,7 +121,24 @@ export default function HomePage() {
           <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
         </div>
         <div className="hm-hero-stage rv">
-          <HeroPallet />
+          <div className="hm-video hm-video--hero">
+            <LoopVideo
+              src="/betsel-home-loop.mp4"
+              poster="/betsel-home-loop-poster.jpg"
+              label="Betsel Stack in use: size a case, generate pallet patterns, compare them in 3D, plan the truck load, and export a branded report"
+              eager
+              control
+            />
+          </div>
+          <ol className="hm-steps" aria-label="What the video shows">
+            <li><b>01</b> Size the case</li>
+            <li><b>02</b> Generate patterns</li>
+            <li><b>03</b> Compare in 3D</li>
+            <li><b>04</b> Rotate &amp; inspect</li>
+            <li><b>05</b> Plan the truck</li>
+            <li><b>06</b> Export a report</li>
+          </ol>
+        </div>
         </div>
       </section>
 
@@ -103,15 +152,46 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ============ POSITIONING ============ */}
+      <section className="hm-section" id="why">
+        <div className="container hm-pos">
+          <div className="hm-pos-intro rv">
+            <p className="hm-tag">What we stand for</p>
+            <h2 className="hm-h2">
+              Focused by design.
+              <br />
+              <span className="hm-dim">Powerful where it matters.</span>
+            </h2>
+            <p className="hm-lede">
+              Packaging decisions are complex. The software you use to make them
+              shouldn&rsquo;t be. Every feature in Betsel Stack earns its place
+              by saving an engineer real time on a real load.
+            </p>
+          </div>
+          <ol className="hm-pillars">
+            {PILLARS.map((p) => (
+              <li className="hm-pillar rv" key={p.n}>
+                <span className="hm-pillar-n">{p.n}</span>
+                <div>
+                  <h3>{p.title}</h3>
+                  <p>{p.body}</p>
+                  <p className="hm-pillar-proof">{p.proof}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       {/* ============ TRY IT ============ */}
-      <section className="hm-section" id="try">
+      <section className="hm-section hm-section--tight" id="try">
         <div className="container">
           <div className="hm-head rv">
             <p className="hm-tag">Try it now</p>
             <h2 className="hm-h2">Type a case. Watch it stack.</h2>
             <p className="hm-lede">
-              No sign-up for this part. Change any number and the layer redraws
-              instantly.
+              No sign-up and no tutorial for this part. Change any number and
+              the layer redraws instantly.
             </p>
           </div>
           <div className="rv">
@@ -140,7 +220,7 @@ export default function HomePage() {
         </section>
       ))}
 
-      {/* ============ WATCH ============ */}
+      {/* ============ REPORTS ============ */}
       <section className="hm-section hm-watch">
         <div className="container">
           <div className="hm-head hm-head--center rv">
@@ -153,7 +233,8 @@ export default function HomePage() {
             <p className="hm-lede">
               Build it, check it, load it, and export a pallet pattern
               engineering report with dimensions, efficiency, stability, and
-              weights, ready for your customer or your floor.
+              weights, ready for your customer or your floor. No retyping
+              numbers into a spreadsheet.
             </p>
           </div>
           <p className="hm-center rv">
@@ -170,9 +251,9 @@ export default function HomePage() {
           <div className="hm-head rv">
             <p className="hm-tag">Why switch</p>
             <h2 className="hm-h2">
-              Pallet software,
+              Powerful tools,
               <br />
-              <span className="hm-dim">without the baggage.</span>
+              <span className="hm-dim">without the enterprise baggage.</span>
             </h2>
           </div>
           <div className="hm-nos">
@@ -191,7 +272,6 @@ export default function HomePage() {
         </div>
       </section>
 
-
       {/* ============ TESTIMONIAL ============ */}
       <div className="rv">
         <Testimonial />
@@ -203,7 +283,10 @@ export default function HomePage() {
           <div className="hm-head hm-head--center rv">
             <p className="hm-tag">Pricing</p>
             <h2 className="hm-h2">One plan. Everything included.</h2>
-            <p className="hm-lede">Every trial starts with 7 free days and full access. No card needed.</p>
+            <p className="hm-lede">
+              No tiers to decode and no features held back. Every trial starts
+              with 7 free days and full access. No card needed.
+            </p>
           </div>
           <div className="hm-plans">
             <div className="hm-plan rv">
@@ -232,8 +315,8 @@ export default function HomePage() {
       <section className="hm-final">
         <div className="container rv">
           <h2 className="hm-display hm-display--sm">
-            Your next pallet pattern
-            <span className="hm-dim">is a few seconds away.</span>
+            Less time on manual work.
+            <span className="hm-dim">More time on what matters.</span>
           </h2>
           <div className="hm-actions hm-actions--center">
             <Link href="/signup" className="btn btn--primary hm-btn-lg">
