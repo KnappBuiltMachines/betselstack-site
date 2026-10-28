@@ -155,17 +155,17 @@ export default function SoftwarePage() {
             <div className="eyebrow">Betsel Stack™</div>
             <h1>The Pallet Pattern Creator</h1>
             <p className="lede">
-              Powerful packaging engineering, made practical. One focused tool for
-              patterns, layers, mixed-case loads, trailer planning, and engineering
-              reports, built so engineers spend less time on manual work and more time
-              on high-value problems.
+              Powerful packaging engineering, made practical. Betsel Stack helps
+              packaging engineers create pallet patterns quickly, with layer planning,
+              3D load checks, trailer loading, and engineering reports in one focused
+              tool.
             </p>
             <p className="lede">
-              Betsel Stack™ goes far beyond traditional Ti-Hi calculations. Build
-              complex mixed-case pallet patterns, place multiple case sizes on a single
-              pallet, customize footprints from quarter pallets to fully custom sizes,
-              and optimize trailer loading across multiple trailer types, without
-              lengthy onboarding or enterprise-level complexity.
+              Betsel Stack™ goes far beyond traditional Ti-Hi calculations. Create
+              uniform patterns from a single case size or mixed-case patterns with
+              several, use full, half, or quarter pallets or any custom footprint, and
+              plan trailer loads for 53′ reefers, 53′ dry vans, 48′ trailers, or custom
+              dimensions, without lengthy onboarding or enterprise-level complexity.
             </p>
             <div className="cta-row">
               <a className="btn btn-primary" href="/signup">Start 7-day free trial →</a>
@@ -179,7 +179,7 @@ export default function SoftwarePage() {
           <div className="wrap">
             <div className="head">
               <div className="eyebrow">See it run</div>
-              <h2>The whole workflow, start to finish</h2>
+              <h2>From case size to finished report</h2>
               <p>
                 Watch a real pallet get built, checked in 3D, loaded into a trailer, and
                 exported as a report — press play for the full guided tour.
@@ -242,9 +242,10 @@ export default function SoftwarePage() {
             </div>
             <div className="grid">
               <div className="card"><h4>Deeper customization</h4><p>Build patterns the way your spec demands, not the way a template forces.</p></div>
-              <div className="card"><h4>Standard &amp; custom pallets</h4><p>GMA, block, stringer, and fully custom dimensions — quarter pallet to oversized.</p></div>
+              <div className="card"><h4>Standard &amp; custom pallets</h4><p>Full 48×40, half, and quarter pallets, or any custom footprint up to oversized.</p></div>
               <div className="card"><h4>Real-time 3D</h4><p>Inspect the load and pattern from any angle before production.</p></div>
-              <div className="card"><h4>Board-level layout</h4><p>Deck boards, stringers, spacing, and overhang under your control.</p></div>
+              <div className="card"><h4>Overhang &amp; height limits</h4><p>Set a maximum load height and see length and width overhang for every pattern.</p></div>
+              <div className="card"><h4>Case Size Calculator</h4><p>Size a case from its primary package, flute, and count, then compare it on the pallet.</p></div>
               <div className="card"><h4>Custom reports</h4><p>Branded reports, custom-generated to meet your company&rsquo;s standards.</p></div>
             </div>
           </div>
@@ -305,19 +306,20 @@ export default function SoftwarePage() {
 
               <article className="dive">
                 <div className="dive-copy">
-                  <span className="tag">Mixed-Case Loads</span>
-                  <h3>Multiple case sizes on one pallet</h3>
+                  <span className="tag">Uniform &amp; Mixed Loads</span>
+                  <h3>One case size or several</h3>
                   <p className="body">
-                    Real shipments are not one SKU. Combine different cases and box sizes,
-                    layer by layer, and see the finished unit load rendered in full 3D.
+                    Build a uniform pallet from a single case size, or combine different
+                    case sizes on one pallet, layer by layer. Either way, see the finished
+                    unit load rendered in full 3D.
                   </p>
                   <div className="why">
-                    <b>Built for real-world packaging —</b> Build and document accurate
-                    mixed loads that match what actually ships.
+                    <b>Built for real-world packaging —</b> Build and document the load
+                    that actually ships, whether it&rsquo;s one SKU or several.
                   </div>
                 </div>
                 <div className="dive-media">
-                  <img src="/screenshots/mixed-3d.jpg" alt="Multiple case sizes on one pallet" />
+                  <img src="/screenshots/mixed-3d.jpg" alt="3D view of a pallet built from more than one case size" />
                 </div>
               </article>
 
@@ -326,7 +328,8 @@ export default function SoftwarePage() {
                   <span className="tag">Trailer Loading</span>
                   <h3>Fill the trailer, keep it balanced</h3>
                   <p className="body">
-                    Plan how pallets fit a 53′ reefer, dry van, or custom trailer — with
+                    Plan how pallets fit a 53′ reefer, 53′ dry van, 48′ trailer, or custom
+                    trailer — with
                     live pallet counts, column-and-row layout, and a center-of-mass
                     balance check.
                   </p>

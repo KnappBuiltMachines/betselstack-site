@@ -10,9 +10,9 @@ export default function SiteFooter() {
             </span>
             <p className="footer-blurb">
               Powerful packaging engineering &mdash; made practical. Betsel
-              Stack&trade; turns real-world palletization challenges into clear,
-              manageable workflows, so packaging engineers spend less time on
-              manual work and more time solving high-value problems.
+              Stack&trade; helps packaging engineers create uniform and
+              mixed-case pallet patterns quickly, check them in 3D, plan the
+              trailer, and export branded reports.
             </p>
             <p className="footer-blurb footer-motto">
               Focused by design. Powerful where it matters.

@@ -10,11 +10,11 @@ export const metadata = {
     template: "%s \u2014 Betsel Stack\u2122",
   },
   description:
-    "Powerful packaging engineering, made practical. Betsel Stack is pallet pattern software that turns real-world palletization problems into clear workflows: ranked patterns, mixed-case loads, 3D checks, trailer planning, and branded reports, in your browser.",
+    "Powerful packaging engineering, made practical. Betsel Stack is pallet pattern software that helps packaging engineers create uniform and mixed-case pallet patterns quickly, check them in 3D, plan trailer loads, and export branded reports, in your browser.",
   openGraph: {
     title: "Betsel Stack\u2122 \u2014 Powerful packaging engineering, made practical",
     description:
-      "Pallet pattern software that gives packaging engineers their time back. Runs in your browser. 7-day free trial.",
+      "Pallet pattern software that helps packaging engineers create pallet patterns quickly. Runs in your browser. 7-day free trial.",
     url: "https://www.betselstack.com",
     siteName: "Betsel Stack",
     type: "website",

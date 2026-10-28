@@ -98,7 +98,7 @@ export default function TopsProAlternative() {
               See the full comparison
             </a>
           </div>
-          <p className="bsa-fineprint">$29/month after trial · or $279/year · no credit card demo call</p>
+          <p className="bsa-fineprint">$29/month after trial · or $279/year · no credit card · no demo call</p>
         </div>
         <div className="bsa-hero-art" aria-hidden="true">
           <PalletSVG />

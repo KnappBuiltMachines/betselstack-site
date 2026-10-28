@@ -3,7 +3,6 @@
 // practical.") + looping product video in the hero.
 // Uses:
 //   app/home.css
-//   components/TiHiDemo.js
 //   components/HomeMotion.js   (RevealObserver, LoopVideo)
 //   components/Testimonial.js
 //   /public/betsel-home-loop.mp4 + /public/betsel-home-loop-poster.jpg
@@ -11,14 +10,13 @@
 
 import Link from "next/link";
 import "./home.css";
-import TiHiDemo from "@/components/TiHiDemo";
 import Testimonial from "@/components/Testimonial";
 import { RevealObserver, LoopVideo } from "@/components/HomeMotion";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
   description:
-    "Pallet pattern software for packaging engineers. Betsel Stack turns real-world palletization problems into clear workflows: ranked patterns in seconds, 3D load checks, trailer planning, and branded reports, right in your browser. $29/month, 7-day free trial, no card.",
+    "Pallet pattern software for packaging engineers. Create uniform or mixed-case pallet patterns in seconds, check the load in 3D, plan the trailer, and export branded reports, right in your browser. $29/month, 7-day free trial, no card.",
 };
 
 // The four things the brand promises, each backed by something the product
@@ -27,7 +25,7 @@ const PILLARS = [
   {
     n: "01",
     title: "Simplify complexity",
-    body: "Hard engineering questions become a few clear steps that feel approachable, even on your first day with the software.",
+    body: "Enter your case and pallet dimensions and get ranked pallet patterns back. Easy to pick up, even on your first day with the software.",
     proof: "Case in. Ranked patterns out.",
   },
   {
@@ -40,7 +38,7 @@ const PILLARS = [
     n: "03",
     title: "Built for real-world packaging",
     body: "Every tool is grounded in how packaging is designed, manufactured, warehoused, and shipped.",
-    proof: "Flutes · GMA & block pallets · 53′ reefers",
+    proof: "Corrugate flutes · full, half & quarter pallets · 53′ reefers",
   },
   {
     n: "04",
@@ -66,9 +64,9 @@ const CHAPTERS = [
     alt: "Layer-by-layer 2D build map with case placement",
   },
   {
-    tag: "Mixed-case loads",
-    title: ["Real shipments", "aren’t one SKU."],
-    body: "Stack different case sizes on one pallet, layer by layer, and see the finished unit load in 3D before anyone builds it.",
+    tag: "Uniform or mixed",
+    title: ["One case size or several.", "Your call."],
+    body: "Build a uniform pallet from a single case size, or combine different case sizes on one pallet, layer by layer. Either way, see the finished unit load in 3D before anyone builds it.",
     img: "/screenshots/mixed-3d.jpg",
     alt: "3D view of a mixed-case pallet with three case sizes",
     narrow: true,
@@ -76,7 +74,7 @@ const CHAPTERS = [
   {
     tag: "Trailer loading",
     title: ["Fill the trailer.", "Keep it balanced."],
-    body: "Drop pallets into a 53′ reefer, dry van, or custom trailer. Live counts and a center-of-mass check tell you it works.",
+    body: "Drop pallets into a 53′ reefer, 53′ dry van, 48′ trailer, or custom trailer. Live counts and a center-of-mass check tell you it works.",
     img: "/screenshots/truck-load.jpg",
     alt: "Trailer top view loaded with 26 pallets, balanced",
     wide: true,
@@ -106,17 +104,17 @@ export default function HomePage() {
             <span className="hm-dim">Made practical.</span>
           </h1>
           <p className="hm-sub rv">
-            Betsel Stack turns real-world palletization problems into clear,
-            manageable workflows, so you spend less time on manual layouts and
-            more time on the problems that matter.
+            Betsel Stack helps packaging engineers create pallet patterns
+            quickly. Enter a case and a pallet, get ranked patterns in seconds,
+            then check the load in 3D and send a branded report.
           </p>
           <div className="hm-actions rv">
             <Link href="/signup" className="btn btn--primary hm-btn-lg">
               Start free trial
             </Link>
-            <a href="#try" className="hm-textlink">
-              Try it right here <span aria-hidden="true">&darr;</span>
-            </a>
+            <Link href="/software#watch" className="hm-textlink">
+              Watch the full tour <span aria-hidden="true">&rarr;</span>
+            </Link>
           </div>
           <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
         </div>
@@ -180,23 +178,6 @@ export default function HomePage() {
               </li>
             ))}
           </ol>
-        </div>
-      </section>
-
-      {/* ============ TRY IT ============ */}
-      <section className="hm-section hm-section--tight" id="try">
-        <div className="container">
-          <div className="hm-head rv">
-            <p className="hm-tag">Try it now</p>
-            <h2 className="hm-h2">Type a case. Watch it stack.</h2>
-            <p className="hm-lede">
-              No sign-up and no tutorial for this part. Change any number and
-              the layer redraws instantly.
-            </p>
-          </div>
-          <div className="rv">
-            <TiHiDemo />
-          </div>
         </div>
       </section>
 
@@ -304,8 +285,8 @@ export default function HomePage() {
             </div>
           </div>
           <p className="hm-center hm-fine rv">
-            Both plans include the full Pallet Pattern Creator: ranked patterns,
-            3D, mixed cases, trailer loading, and custom reports.{" "}
+            Both plans include the full Pallet Pattern Creator: ranked uniform
+            and mixed-case patterns, 3D, trailer loading, and custom reports.{" "}
             <Link href="/pricing" className="hm-inline">Plan details</Link>
           </p>
         </div>
@@ -315,8 +296,8 @@ export default function HomePage() {
       <section className="hm-final">
         <div className="container rv">
           <h2 className="hm-display hm-display--sm">
-            Less time on manual work.
-            <span className="hm-dim">More time on what matters.</span>
+            Your next pallet pattern
+            <span className="hm-dim">is seconds away.</span>
           </h2>
           <div className="hm-actions hm-actions--center">
             <Link href="/signup" className="btn btn--primary hm-btn-lg">

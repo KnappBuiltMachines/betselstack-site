@@ -58,7 +58,7 @@ const GROUPS = [
         a: [
           "Trailer utilization is decided by the pallet pattern, not by the loading crew. Freight is paid by the trailer, so an unused cubic foot is a cost whether or not anything occupies it \u2014 which means the pattern that maximizes cases per pallet is not always the pattern that maximizes cases per trailer.",
           "A standard 53-foot dry van holds 26 GMA pallets floor-loaded in a single tier, or 52 when loads are double-stacked. Working backward from those figures often reveals that a slightly shorter or narrower unit load ships more product per trailer than a taller one that cannot be double-stacked.",
-          "The productive approach is to evaluate pattern and trailer fit together rather than in sequence. Betsel Stack models 53-foot reefers, dry vans, and custom trailer dimensions with live pallet counts and a balance check.",
+          "The productive approach is to evaluate pattern and trailer fit together rather than in sequence. Betsel Stack models 53-foot reefers, 53-foot dry vans, 48-foot trailers, and custom trailer dimensions with live pallet counts and a balance check.",
         ],
       },
     ],
@@ -72,7 +72,7 @@ const GROUPS = [
         a: [
           "TOPS Pro is a long-established desktop palletization package, installed locally and licensed per workstation. It is capable software with a deep feature set, and for many large packaging departments it is the incumbent.",
           "Teams typically look for an alternative on cost, on the licensing and installation burden, or because they need access from more than one machine. Browser-based tools have become the common substitute, since they remove installation entirely and are reachable from any workstation.",
-          "Betsel Stack is a browser-based alternative at $29 per month, with a 7-day free trial that does not require a credit card. It generates ranked pattern sets, supports mixed-case loads, renders loads in real-time 3D, and produces branded PDF reports.",
+          "Betsel Stack is a browser-based alternative at $29 per month, with a 7-day free trial that does not require a credit card. It generates ranked pattern sets for uniform and mixed-case loads, renders loads in real-time 3D, and produces branded PDF reports.",
         ],
       },
       {
@@ -93,7 +93,7 @@ const GROUPS = [
       {
         q: "Is there a free pallet pattern generator?",
         a: [
-          "Free online pallet calculators exist and are genuinely useful for a quick cases-per-layer estimate on a single standard case. They generally stop there \u2014 no mixed-case loads, no custom pallet construction, no saved work, no stability assessment, and no report you can hand to a customer or put in a spec package.",
+          "Free online pallet calculators exist and are genuinely useful for a quick cases-per-layer estimate on a single standard case. They generally stop there \u2014 no mixed-case loads, no custom pallet sizes, no saved work, no stability assessment, and no report you can hand to a customer or put in a spec package.",
           "For one-off arithmetic, a free calculator is fine. For work that has to be defended, reproduced, and documented, it is not.",
           "Betsel Stack offers a 7-day free trial with full access and no credit card required, which is the practical way to find out whether a full tool is warranted.",
         ],
@@ -133,7 +133,7 @@ const GROUPS = [
       {
         q: "Are there limits on pallet size or the number of case sizes in a load?",
         a: [
-          "No. Pallet dimensions are fully configurable, from quarter pallets through oversized custom footprints, including deck board layout, stringer placement, and spacing. There is no fixed ceiling on the number of case sizes that can be combined in a mixed-case load.",
+          "No. Pallet dimensions are fully configurable, from quarter and half pallets through full 48 x 40 and oversized custom footprints. There is no fixed ceiling on the number of case sizes that can be combined in a mixed-case load.",
         ],
       },
       {
