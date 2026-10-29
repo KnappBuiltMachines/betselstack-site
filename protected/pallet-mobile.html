@@ -48,6 +48,19 @@
   .stat{ background:var(--panel); border-radius:8px; padding:10px 6px; text-align:center; }
   .stat .v{ font-size:18px; font-weight:600; } .stat .v.acc{ color:var(--go); }
   .stat .k{ font-size:10px; color:var(--muted); letter-spacing:.06em; margin-top:2px; }
+  .seg.sm{ margin-bottom:10px; }
+  .seg.sm button{ height:38px; font-size:14px; }
+  .canvas-card.is3d{ touch-action:none; }
+  .canvas-card.is3d canvas{ background:radial-gradient(ellipse at 50% 70%, #34383d 0%, #1b1b1b 75%); }
+  .v3hud{ position:absolute; left:50%; bottom:16px; transform:translateX(-50%); pointer-events:none;
+    background:rgba(0,0,0,.6); border:1px solid var(--line); border-radius:999px; padding:5px 12px;
+    font-size:12px; letter-spacing:.04em; color:var(--txt); white-space:nowrap; }
+  .v3hud b{ color:var(--go); font-weight:600; }
+  .v3hint{ position:absolute; right:16px; top:14px; pointer-events:none; font-size:11px; color:var(--muted);
+    letter-spacing:.06em; }
+  #mbStackWrap{ margin-top:10px; }
+  #mbStackWrap[hidden]{ display:none; }
+  #mbStackHint{ margin-top:6px; min-height:16px; }
   .vactions{ margin-top:auto; display:flex; gap:8px; }
   .vactions .btn{ margin-top:0; }
 
@@ -136,10 +149,25 @@
     </div>
     <div class="pname" id="mbPName">&nbsp;</div>
 
+    <div class="seg sm" role="group" aria-label="View">
+      <button id="mbView2d" class="on" onclick="mbSetView('2d')">2D layer</button>
+      <button id="mbView3d" onclick="mbSetView('3d')">3D load</button>
+    </div>
+
     <div class="canvas-card" id="mbCanvasCard">
       <canvas id="mbCanvas"></canvas>
+      <div class="v3hint" id="mbV3Hint" hidden>Drag to rotate</div>
+      <div class="v3hud" id="mbV3Hud" hidden></div>
       <div class="nav prev" onclick="mbStep(-1)">&#8249;</div>
       <div class="nav next" onclick="mbStep(1)">&#8250;</div>
+    </div>
+
+    <div id="mbStackWrap" hidden>
+      <div class="seg sm" role="group" aria-label="Stacking" style="margin-bottom:0;">
+        <button id="mbStackCol" class="on" onclick="mbSetStack(false)">Column stack</button>
+        <button id="mbStackIl" onclick="mbSetStack(true)">Interlock</button>
+      </div>
+      <div class="hint" id="mbStackHint"></div>
     </div>
 
     <div class="stats">
@@ -311,7 +339,7 @@ function mbGenerate(){
   if(!pats || !pats.length){ mbToast('No patterns fit this case on this pallet', true); return; }
 
   MB.patterns = pats.map(function(p){
-    return { p:p, layers:layers, total:(p.count || 0) * layers, pW:pW, pL:pL, pH:pH };
+    return { p:p, layers:layers, total:(p.count || 0) * layers, pW:pW, pL:pL, pH:pH, cH:cH };
   });
   MB.idx = 0;
   MB.lastInputs = {
@@ -350,10 +378,16 @@ function mbRenderPattern(){
   mbEl('mbLayers').textContent = item.layers;
   mbEl('mbTotal').textContent = item.total;
   mbEl('mbCube').textContent = (p.cubicEff != null ? p.cubicEff : 0) + '%';
+  mbUpdateStackUI(item);
   mbDraw(item);
 }
 
 function mbDraw(item){
+  if(MB.view === '3d') mbDraw3D(item);
+  else mbDraw2D(item);
+}
+
+function mbDraw2D(item){
   var canvas = mbEl('mbCanvas');
   var card = mbEl('mbCanvasCard');
   var cssW = card.clientWidth - 20;            // minus padding
@@ -394,12 +428,219 @@ function mbDraw(item){
   }
 }
 
-// Swipe between patterns
+// ── 3D load view ──────────────────────────────────────────────
+// Lightweight canvas renderer (no 3D library): orthographic projection,
+// boxes drawn bottom layer first, and within a layer far-to-near with all
+// side faces before top faces. Same-height, non-overlapping cases in a layer
+// make that order exact. Redraws only while the user drags, so it costs
+// nothing when idle.
+// Column stack = every layer uses the pattern's placements.
+// Interlock    = odd layers use placementsB (layer turned 180°), exactly
+//                like the desktop builder's INTERLOCK toggle.
+MB.view = '2d';
+MB.interlock = false;
+var MB3 = { theta: -0.62, phi: 0.56, drag: null, raf: 0 };
+
+function mbSetView(v){
+  MB.view = (v === '3d') ? '3d' : '2d';
+  mbEl('mbView2d').classList.toggle('on', MB.view === '2d');
+  mbEl('mbView3d').classList.toggle('on', MB.view === '3d');
+  mbEl('mbCanvasCard').classList.toggle('is3d', MB.view === '3d');
+  mbEl('mbStackWrap').hidden = (MB.view !== '3d');
+  mbEl('mbV3Hud').hidden = (MB.view !== '3d');
+  mbEl('mbV3Hint').hidden = (MB.view !== '3d');
+  mbRenderPattern();
+}
+
+function mbSetStack(on){
+  var item = MB.patterns[MB.idx];
+  if(on && item && !item.p.placementsB) return;
+  MB.interlock = !!on;
+  mbRenderPattern();
+}
+
+function mbLayerKey(pls){
+  return (pls || []).map(function(q){
+    return [r2(q.x), r2(q.y), r2(q.w), r2(q.l)].join(',');
+  }).sort().join('|');
+}
+
+function mbUpdateStackUI(item){
+  var p = item.p;
+  var canIl = !!p.placementsB;
+  if(!canIl) MB.interlock = false;
+  var btnIl = mbEl('mbStackIl');
+  btnIl.disabled = !canIl;
+  btnIl.style.opacity = canIl ? '' : '.45';
+  mbEl('mbStackCol').classList.toggle('on', !MB.interlock);
+  btnIl.classList.toggle('on', MB.interlock);
+  var hint;
+  if(!canIl) hint = 'Interlock isn’t available for this pattern.';
+  else if(mbLayerKey(p.placements) === mbLayerKey(p.placementsB))
+    hint = 'This layer looks the same turned 180°, so both options stack identically.';
+  else if(MB.interlock) hint = 'Every other layer is turned 180° so the seams don’t line up.';
+  else hint = 'Every layer is identical, so cases stack in straight columns.';
+  mbEl('mbStackHint').textContent = hint;
+}
+
+function mbShade(hex, f){
+  var n = parseInt(hex.slice(1), 16);
+  var r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+  var g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+  var b = Math.min(255, Math.round((n & 255) * f));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function mbDraw3D(item){
+  var canvas = mbEl('mbCanvas');
+  var card = mbEl('mbCanvasCard');
+  var cssW = card.clientWidth - 20;
+  if(cssW < 80) cssW = 280;
+  var cssH = Math.max(260, Math.min(440, Math.round(cssW * 0.92)));
+  var dpr = window.devicePixelRatio || 1;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  var p = item.p, pW = item.pW, pL = item.pL, pH = item.pH, cH = item.cH, layers = item.layers;
+  var plsA = p.placements || [];
+  var plsB = (MB.interlock && p.placementsB) ? p.placementsB : plsA;
+  var loadH = pH + layers * cH;
+
+  // Extents (cases may overhang the pallet)
+  var mnX = 0, mxX = pW, mnY = 0, mxY = pL;
+  plsA.concat(plsB).forEach(function(q){
+    mnX = Math.min(mnX, q.x); mxX = Math.max(mxX, q.x + q.w);
+    mnY = Math.min(mnY, q.y); mxY = Math.max(mxY, q.y + q.l);
+  });
+  var cx = (mnX + mxX) / 2, cy = (mnY + mxY) / 2, cz = loadH / 2;
+  var rad = 0.5 * Math.sqrt(Math.pow(mxX - mnX, 2) + Math.pow(mxY - mnY, 2) + loadH * loadH);
+  var s = Math.min(cssW, cssH - 34) * 0.47 / rad;
+  var ct = Math.cos(MB3.theta), st = Math.sin(MB3.theta);
+  var cp = Math.cos(MB3.phi), sp = Math.sin(MB3.phi);
+  var midX = cssW / 2, midY = (cssH - 26) / 2;
+
+  function P(x, y, z){
+    var dx = x - cx, dy = y - cy, dz = z - cz;
+    var xr = dx * ct - dy * st, yr = dx * st + dy * ct;
+    return [midX + xr * s, midY + (yr * sp - dz * cp) * s];
+  }
+  function depth(x, y, z){
+    var dx = x - cx, dy = y - cy, dz = z - cz;
+    return (dx * st + dy * ct) * cp + dz * sp;
+  }
+  var lw = Math.max(0.5, Math.min(1.2, s * 0.09));
+  function poly(pts, fill){
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for(var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.42)'; ctx.lineWidth = lw; ctx.stroke();
+  }
+  // Draw a set of same-height boxes: far-to-near sides, then tops.
+  function group(boxes){
+    boxes.forEach(function(b){ b.d = depth(b.x + b.w / 2, b.y + b.l / 2, b.z + b.h / 2); });
+    boxes.sort(function(a, b){ return a.d - b.d; });
+    boxes.forEach(function(b){
+      var X = st > 0 ? b.x + b.w : b.x;
+      var Y = ct > 0 ? b.y + b.l : b.y;
+      poly([P(X, b.y, b.z), P(X, b.y + b.l, b.z), P(X, b.y + b.l, b.z + b.h), P(X, b.y, b.z + b.h)], mbShade(b.c, 0.76 * (b.t || 1)));
+      poly([P(b.x, Y, b.z), P(b.x + b.w, Y, b.z), P(b.x + b.w, Y, b.z + b.h), P(b.x, Y, b.z + b.h)], mbShade(b.c, 0.6 * (b.t || 1)));
+    });
+    boxes.forEach(function(b){
+      var t = b.z + b.h;
+      poly([P(b.x, b.y, t), P(b.x + b.w, b.y, t), P(b.x + b.w, b.y + b.l, t), P(b.x, b.y + b.l, t)], mbShade(b.c, b.t || 1));
+    });
+  }
+
+  // Floor shadow
+  var g = 1.5;
+  ctx.beginPath();
+  [P(mnX - g, mnY - g, 0), P(mxX + g, mnY - g, 0), P(mxX + g, mxY + g, 0), P(mnX - g, mxY + g, 0)]
+    .forEach(function(pt, i){ i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]); });
+  ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
+
+  // Pallet: three runners along the long side + deck boards across them
+  var WOOD = '#b8894a', deckT = 0.75, runH = Math.max(0.5, pH - deckT);
+  var alongY = pL >= pW, longD = alongY ? pL : pW, shortD = alongY ? pW : pL;
+  var runW = Math.min(3.5, shortD * 0.09), runs = [];
+  [0, (shortD - runW) / 2, shortD - runW].forEach(function(o){
+    runs.push(alongY ? { x:o, y:0, z:0, w:runW, l:pL, h:runH, c:WOOD, t:0.85 }
+                     : { x:0, y:o, z:0, w:pW, l:runW, h:runH, c:WOOD, t:0.85 });
+  });
+  group(runs);
+  var nB = Math.max(3, Math.round(longD / 7)), bW = Math.min(5.5, longD / (nB * 1.35)), deck = [];
+  for(var i = 0; i < nB; i++){
+    var o = (longD - bW) * i / (nB - 1);
+    deck.push(alongY ? { x:0, y:o, z:runH, w:pW, l:bW, h:deckT, c:WOOD }
+                     : { x:o, y:0, z:runH, w:bW, l:pL, h:deckT, c:WOOD });
+  }
+  group(deck);
+
+  // Case layers, bottom up
+  for(var k = 0; k < layers; k++){
+    var pls = (k % 2 === 1) ? plsB : plsA;
+    var tint = (k % 2 === 1) ? 0.9 : 1;
+    var z0 = pH + k * cH;
+    group(pls.map(function(q){
+      return { x:q.x, y:q.y, z:z0, w:q.w, l:q.l, h:cH,
+               c:(q.ori === 0 ? '#f5a623' : '#c8831a'), t:tint };
+    }));
+  }
+
+  var unit = (MB.unit === 'mm') ? 'mm' : 'in';
+  var hDisp = (MB.unit === 'mm') ? Math.round(loadH * 25.4) : r2(loadH);
+  mbEl('mbV3Hud').innerHTML = 'H <b>' + hDisp + '</b> ' + unit + ' &middot; <b>' + layers + '</b> layers &middot; ' +
+    (MB.interlock ? 'Interlocked' : 'Column stack');
+}
+
+// Drag to rotate (3D only). Horizontal = turn, vertical = tilt.
+(function(){
+  var canvas = mbEl('mbCanvas');
+  if(!canvas) return;
+  function redraw(){
+    if(MB3.raf) return;
+    MB3.raf = requestAnimationFrame(function(){
+      MB3.raf = 0;
+      var item = MB.patterns[MB.idx];
+      if(item && MB.view === '3d') mbDraw3D(item);
+    });
+  }
+  canvas.addEventListener('pointerdown', function(e){
+    if(MB.view !== '3d') return;
+    MB3.drag = { x:e.clientX, y:e.clientY };
+    try { canvas.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  canvas.addEventListener('pointermove', function(e){
+    if(!MB3.drag || MB.view !== '3d') return;
+    var dx = e.clientX - MB3.drag.x, dy = e.clientY - MB3.drag.y;
+    MB3.drag = { x:e.clientX, y:e.clientY };
+    MB3.theta -= dx * 0.012;
+    MB3.phi = Math.max(0.12, Math.min(1.45, MB3.phi + dy * 0.008));
+    redraw();
+  });
+  function end(){ MB3.drag = null; }
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  var rz = 0;
+  window.addEventListener('resize', function(){
+    clearTimeout(rz);
+    rz = setTimeout(function(){ if(!mbEl('mbViewer').hidden && MB.patterns.length) mbRenderPattern(); }, 120);
+  });
+})();
+
+// Swipe between patterns (2D only — in 3D a drag rotates the load)
 (function(){
   var sx = 0, sy = 0, tracking = false;
   var card = mbEl('mbCanvasCard');
   if(!card) return;
   card.addEventListener('touchstart', function(e){
+    if(MB.view === '3d' && e.target && e.target.id === 'mbCanvas'){ tracking = false; return; }
     var t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY; tracking = true;
   }, { passive:true });
   card.addEventListener('touchend', function(e){
