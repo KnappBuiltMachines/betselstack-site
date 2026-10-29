@@ -136,6 +136,24 @@ export default function SoftwarePage() {
   .bs-sw .dive:nth-child(even) .dive-copy,.bs-sw .dive:nth-child(even) .dive-media{order:0}
 }
 
+/* desktop vs mobile */
+.bs-sw .duo{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-top:44px}
+.bs-sw .ver{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px}
+.bs-sw .ver.full{border-color:var(--line-amber);
+  background:radial-gradient(500px 220px at 0% 0%, rgba(251,169,15,.09), transparent 70%),var(--panel)}
+.bs-sw .ver .badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.bs-sw .ver.full .badge{background:var(--amber);border-color:var(--amber);color:#1a1205;font-weight:700}
+.bs-sw .ver h3{font-family:var(--disp);font-weight:600;font-size:22px;margin:16px 0 0;letter-spacing:-.01em}
+.bs-sw .ver p{color:var(--muted);font-size:15px;margin:10px 0 0}
+.bs-sw .ver ul{margin:16px 0 0;padding:0;list-style:none}
+.bs-sw .ver li{position:relative;padding-left:22px;color:var(--text);font-size:14.5px;margin-top:9px}
+.bs-sw .ver li::before{content:"";position:absolute;left:2px;top:.62em;width:8px;height:8px;border-radius:2px;
+  background:var(--amber)}
+.bs-sw .ver:not(.full) li::before{background:var(--muted-2)}
+.bs-sw .duo-note{text-align:center;color:var(--muted-2);font-size:14px;margin:22px auto 0;max-width:60ch}
+@media(max-width:820px){.bs-sw .duo{grid-template-columns:1fr}}
+
 /* trial CTA */
 .bs-sw .trial{margin:18px 0 90px;border-radius:20px;border:1px solid var(--line-amber);
   background:radial-gradient(600px 300px at 50% -20%, rgba(251,169,15,.15), transparent 70%),var(--panel);
@@ -362,6 +380,50 @@ export default function SoftwarePage() {
                 </div>
               </article>
             </div>
+          </div>
+        </section>
+
+        {/* DESKTOP VS MOBILE */}
+        <section className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="sec-head">
+              <div className="eyebrow">Desktop &amp; mobile</div>
+              <h2>Build at your desk. Check it on the line.</h2>
+              <p>
+                The desktop version is the full Pallet Pattern Creator. The mobile
+                version is a companion for quick looks at your pallet patterns, on
+                the go or down at the manufacturing line.
+              </p>
+            </div>
+            <div className="duo">
+              <article className="ver full">
+                <span className="badge">Full version</span>
+                <h3>Desktop</h3>
+                <p>Everything you need to engineer, document, and ship the load.</p>
+                <ul>
+                  <li>Ranked uniform and mixed-case pallet patterns</li>
+                  <li>Layer editor, 3D load view, and interlock control</li>
+                  <li>Case Size Calculator and pallet comparison</li>
+                  <li>Trailer loading with a center-of-mass check</li>
+                  <li>Branded report builder and PDF export</li>
+                </ul>
+              </article>
+              <article className="ver">
+                <span className="badge">Mobile companion</span>
+                <h3>Mobile</h3>
+                <p>Your saved work in your pocket, for quick reviews away from your desk.</p>
+                <ul>
+                  <li>Open the patterns and reports you saved to the cloud</li>
+                  <li>See the layer in 2D, or rotate the full load in 3D</li>
+                  <li>Compare column stack and interlock</li>
+                  <li>Run a quick pattern for a single case size</li>
+                </ul>
+              </article>
+            </div>
+            <p className="duo-note">
+              Both are included in every plan and run in your browser. Open the mobile
+              version on your phone from your account page; nothing to install.
+            </p>
           </div>
         </section>
 
