@@ -16,6 +16,8 @@
 // and the 4-step flow ribbon. Everything else is your current page content.
 // =============================================================================
 
+import { LoopVideo } from '@/components/HomeMotion';
+
 export const metadata = {
   title: 'Stack Software',
   description:
@@ -62,6 +64,25 @@ export default function SoftwarePage() {
 .bs-sw .btn-primary:hover{background:#ffb724;transform:translateY(-1px)}
 .bs-sw .btn-ghost{border-color:var(--line);color:var(--text);background:var(--panel)}
 .bs-sw .btn-ghost:hover{border-color:var(--muted);background:var(--panel-2)}
+
+/* looping product clip (moved here from the home page, Oct 30 2026) */
+.bs-sw .loop{padding:0 0 64px}
+.bs-sw .loop-frame{max-width:1040px;margin:0 auto;border-radius:18px;overflow:hidden;
+  border:1px solid var(--line);background:#000;
+  box-shadow:0 60px 160px -60px rgba(251,169,15,.38),0 0 0 1px rgba(251,169,15,.06)}
+.bs-sw .lv{position:relative}
+.bs-sw .lv video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#000}
+.bs-sw .lv-btn{position:absolute;right:14px;top:14px;width:36px;height:36px;display:grid;place-items:center;
+  border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(11,12,14,.62);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:var(--text);cursor:pointer;
+  opacity:.7;transition:opacity .2s,background .2s}
+.bs-sw .lv:hover .lv-btn,.bs-sw .lv-btn:focus-visible{opacity:1}
+.bs-sw .lv-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.bs-sw .loop-steps{list-style:none;margin:22px auto 0;padding:0;display:flex;flex-wrap:wrap;
+  justify-content:center;gap:8px 22px;color:var(--muted);font-size:14px}
+.bs-sw .loop-steps b{color:var(--amber);font-family:var(--mono);font-weight:700;margin-right:6px}
+@media(max-width:720px){.bs-sw .loop-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  max-width:340px;text-align:left}.bs-sw .lv-btn{right:10px;top:10px;width:32px;height:32px}}
 
 /* NEW: video showcase */
 .bs-sw .show{padding:18px 0 12px}
@@ -189,6 +210,29 @@ export default function SoftwarePage() {
               <a className="btn btn-primary" href="/signup">Start 7-day free trial →</a>
               <a className="btn btn-ghost" href="#watch">Watch the demo</a>
             </div>
+          </div>
+        </section>
+
+        {/* ============ LOOPING PRODUCT CLIP (moved from home page) ============ */}
+        <section className="loop" aria-label="Betsel Stack product clip">
+          <div className="wrap">
+            <div className="loop-frame">
+              <LoopVideo
+                src="/betsel-home-loop.mp4"
+                poster="/betsel-home-loop-poster.jpg"
+                label="Betsel Stack in use: size a case, generate pallet patterns, compare them in 3D, plan the truck load, and export a branded report"
+                eager
+                control
+              />
+            </div>
+            <ol className="loop-steps" aria-label="What the video shows">
+              <li><b>01</b> Size the case</li>
+              <li><b>02</b> Generate patterns</li>
+              <li><b>03</b> Compare in 3D</li>
+              <li><b>04</b> Rotate &amp; inspect</li>
+              <li><b>05</b> Plan the truck</li>
+              <li><b>06</b> Export a report</li>
+            </ol>
           </div>
         </section>
 

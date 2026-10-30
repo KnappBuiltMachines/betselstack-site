@@ -1,17 +1,30 @@
 // app/page.js — Betsel Stack home page
-// Oct 2026: brand positioning pass ("Powerful packaging engineering — made
-// practical.") + looping product video in the hero.
+// Oct 30 2026 redesign: a simple, scroll-driven story.
+//   1. Centered hero               5. Why switch
+//   2. Proof strip                 6. From the field (review card, 5 stars)
+//   3. What we stand for (pillars) 7. Pricing
+//   4. How it works (scroll story) 8. Final CTA
+// The looping product video moved to the Stack Software page (/software).
+//
 // Uses:
 //   app/home.css
-//   components/HomeMotion.js   (RevealObserver, LoopVideo)
+//   components/HomeMotion.js   (RevealObserver)
+//   components/ScrollStory.js  + components/StoryArt.js
 //   components/Testimonial.js
-//   /public/betsel-home-loop.mp4 + /public/betsel-home-loop-poster.jpg
-//   /public/screenshots/*.jpg
+//   /public/story/*.jpg
+//
+// REAL PHOTOS for the truck and warehouse steps: upload
+//   /public/story/truck-photo.jpg   and/or   /public/story/warehouse-photo.jpg
+// (landscape, about 1600 x 1200). They replace the illustrations automatically
+// on the next deploy. No code change needed.
 
+import fs from "fs";
+import path from "path";
 import Link from "next/link";
 import "./home.css";
 import Testimonial from "@/components/Testimonial";
-import { RevealObserver, LoopVideo } from "@/components/HomeMotion";
+import ScrollStory from "@/components/ScrollStory";
+import { RevealObserver } from "@/components/HomeMotion";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
@@ -19,65 +32,74 @@ export const metadata = {
     "Pallet pattern software for packaging engineers. Create uniform or mixed-case pallet patterns in seconds, check the load in 3D, plan the trailer, and export branded reports, right in your browser. $29/month, 7-day free trial, no card.",
 };
 
-// The four things the brand promises, each backed by something the product
-// actually does.
-const PILLARS = [
-  {
-    n: "01",
-    title: "Simplify complexity",
-    body: "Enter your case and pallet dimensions and get ranked pallet patterns back. Easy to pick up, even on your first day with the software.",
-    proof: "Case in. Ranked patterns out.",
-  },
-  {
-    n: "02",
-    title: "Give engineers their time back",
-    body: "No repetitive calculations, hand-drawn layouts, spreadsheet work, or avoidable rework.",
-    proof: "Ti-Hi, overhang & stability, calculated for you",
-  },
-  {
-    n: "03",
-    title: "Built for real-world packaging",
-    body: "Every tool is grounded in how packaging is designed, manufactured, warehoused, and shipped.",
-    proof: "Corrugate flutes · full, half & quarter pallets · 53′ reefers",
-  },
-  {
-    n: "04",
-    title: "Powerful tools, made accessible",
-    body: "Focused software without unnecessary features, lengthy onboarding, or enterprise-level complexity.",
-    proof: "Runs in your browser · $29/month",
-  },
+// Use a real photo when one has been uploaded to /public/story/.
+function photoIfPresent(file) {
+  try {
+    return fs.existsSync(path.join(process.cwd(), "public", "story", file)) ? `/story/${file}` : null;
+  } catch {
+    return null;
+  }
+}
+
+const PROOF = [
+  ["Seconds", "Case size in. Ranked patterns out."],
+  ["1 click", "A branded report, ready to send."],
+  ["0", "Downloads, installs, or IT tickets."],
+  ["$29", "A month. Every feature included."],
 ];
 
-const CHAPTERS = [
+// Brand pillars, each with a simple icon that shows the idea.
+const ICONS = {
+  simplify: (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M5 30c4-14 8 6 12-6s7-10 9 0" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" opacity=".6" />
+      <path d="M26 24h16m-5-5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  time: (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M9 24a15 15 0 1 0 4.4-10.6" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
+      <path d="M8 8v7h7" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 15v10l6 4" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  real: (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="9" y="10" width="14" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
+      <rect x="25" y="10" width="14" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
+      <rect x="9" y="23" width="30" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
+      <path d="M6 37h36M10 37v4M24 37v4M38 37v4" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
+    </svg>
+  ),
+  access: (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="5" y="9" width="38" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="2.6" />
+      <path d="M5 16h38" stroke="currentColor" strokeWidth="2.6" />
+      <path d="M17 26.5l5 5 9-10" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+};
+
+const PILLARS = [
   {
-    tag: "Pattern engine",
-    title: ["Start from the best pattern.", "Not a blank screen."],
-    body: "Enter a case and a pallet. Betsel Stack does the repetitive math and puts the strongest layout at the top, ranked by cubic efficiency, case support, and stability.",
-    img: "/screenshots/builder.jpg",
-    alt: "Pallet Pattern Builder showing a ranked pattern list and a 3D unit load",
+    icon: "simplify",
+    title: "Simplify complexity",
+    body: "Enter a case and a pallet. Get ranked patterns back. Easy from day one.",
   },
   {
-    tag: "Layer planning",
-    title: ["Every layer,", "called out."],
-    body: "Step through the load one layer at a time, interlocked or alternating, with every case placed and turned exactly as it ships. A build map your floor can follow, with less rework.",
-    img: "/screenshots/layers-2d.jpg",
-    alt: "Layer-by-layer 2D build map with case placement",
+    icon: "time",
+    title: "Give engineers their time back",
+    body: "No repetitive math, hand-drawn layouts, or spreadsheet rework.",
   },
   {
-    tag: "Uniform or mixed",
-    title: ["One case size or several.", "Your call."],
-    body: "Build a uniform pallet from a single case size, or combine different case sizes on one pallet, layer by layer. Either way, see the finished unit load in 3D before anyone builds it.",
-    img: "/screenshots/mixed-3d.jpg",
-    alt: "3D view of a mixed-case pallet with three case sizes",
-    narrow: true,
+    icon: "real",
+    title: "Built for real-world packaging",
+    body: "Grounded in how packaging is made, stored, and shipped.",
   },
   {
-    tag: "Trailer loading",
-    title: ["Fill the trailer.", "Keep it balanced."],
-    body: "Drop pallets into a 53′ reefer, 53′ dry van, 48′ trailer, or custom trailer. Live counts and a center-of-mass check tell you it works.",
-    img: "/screenshots/truck-load.jpg",
-    alt: "Trailer top view loaded with 26 pallets, balanced",
-    wide: true,
+    icon: "access",
+    title: "Powerful tools, made accessible",
+    body: "Runs in your browser. No bloat, no long onboarding, no enterprise price.",
   },
 ];
 
@@ -89,15 +111,76 @@ const NOS = [
 ];
 
 export default function HomePage() {
+  // One case, followed from the first number typed to the warehouse shelf.
+  // The figures match the screenshots: 12x9x6.5 case, 48x40 pallet,
+  // 17 per layer x 7 layers = 119 cases, 26 pallets in a 53' reefer.
+  const STORY = [
+    {
+      key: "case",
+      label: "Case",
+      title: "It starts with one box.",
+      body: "Type in your case size and choose a pallet. That's the whole setup.",
+      chip: "12 × 9 × 6.5 in case · 48 × 40 pallet",
+      art: "input",
+    },
+    {
+      key: "layer",
+      label: "Layer",
+      title: "Every layer, mapped.",
+      body: "Ranked patterns appear in seconds. Pick one and get a layer-by-layer build map your floor can follow.",
+      chip: "17 cases per layer · 95.6% efficient",
+      img: "/story/layer-2d.jpg",
+      alt: "2D layer map of a 48 by 40 pallet with 17 cases",
+    },
+    {
+      key: "pallet",
+      label: "Pallet",
+      title: "See the full pallet in 3D.",
+      body: "Rotate it and check height, overhang, and stability before anyone stacks a single case.",
+      chip: "119 cases · 51 in tall · 0 in overhang",
+      img: "/story/pallet-3d.jpg",
+      alt: "3D view of the finished pallet load, 48 by 40 by 51 inches",
+    },
+    {
+      key: "trailer",
+      label: "Trailer",
+      title: "Fill the trailer. Keep it balanced.",
+      body: "Drop pallets into a 53′ reefer, dry van, or custom trailer. Live counts and a center-of-mass check confirm it works.",
+      chip: "26 pallets · balanced",
+      img: "/story/truck-load.jpg",
+      alt: "Top view of a 53 foot trailer loaded with 26 pallets, balanced",
+      wide: true,
+    },
+    {
+      key: "truck",
+      label: "Truck",
+      title: "On the road. No wasted space.",
+      body: "A tighter pattern puts more product on every trip, so fewer trucks carry the same order.",
+      chip: "3,094 cases on one truck",
+      art: "truck",
+      photo: photoIfPresent("truck-photo.jpg"),
+      alt: "A loaded tractor-trailer on the highway",
+    },
+    {
+      key: "dc",
+      label: "Warehouse",
+      title: "Arrives ready for the shelf.",
+      body: "Square, stable pallets unload cleanly and fit the racking. Your report puts every number in front of the floor, the warehouse, and your customer.",
+      chip: "Branded report shared in 1 click",
+      art: "warehouse",
+      photo: photoIfPresent("warehouse-photo.jpg"),
+      alt: "Pallets stored in racking at a distribution center",
+    },
+  ];
+
   return (
     <div className="hm">
       <RevealObserver />
 
       {/* ============ HERO ============ */}
-      <section className="hm-hero hm-hero--split">
+      <section className="hm-hero">
         <div className="hm-floor" aria-hidden="true" />
-        <div className="container hm-hero-grid">
-        <div className="hm-hero-inner">
+        <div className="container hm-hero-inner">
           <p className="hm-kicker rv">Betsel Stack&trade; &middot; Pallet pattern software for packaging engineers</p>
           <h1 className="hm-display rv">
             Powerful packaging engineering.
@@ -112,128 +195,81 @@ export default function HomePage() {
             <Link href="/signup" className="btn btn--primary hm-btn-lg">
               Start free trial
             </Link>
-            <Link href="/software#watch" className="hm-textlink">
-              Watch the full tour <span aria-hidden="true">&rarr;</span>
-            </Link>
+            <a href="#how" className="hm-textlink">
+              See how it works <span aria-hidden="true">&darr;</span>
+            </a>
           </div>
           <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
-        </div>
-        <div className="hm-hero-stage rv">
-          <div className="hm-video hm-video--hero">
-            <LoopVideo
-              src="/betsel-home-loop.mp4"
-              poster="/betsel-home-loop-poster.jpg"
-              label="Betsel Stack in use: size a case, generate pallet patterns, compare them in 3D, plan the truck load, and export a branded report"
-              eager
-              control
-            />
-          </div>
-          <ol className="hm-steps" aria-label="What the video shows">
-            <li><b>01</b> Size the case</li>
-            <li><b>02</b> Generate patterns</li>
-            <li><b>03</b> Compare in 3D</li>
-            <li><b>04</b> Rotate &amp; inspect</li>
-            <li><b>05</b> Plan the truck</li>
-            <li><b>06</b> Export a report</li>
-          </ol>
-        </div>
         </div>
       </section>
 
       {/* ============ PROOF STRIP ============ */}
-      <section className="hm-proof">
+      <section className="hm-proof" aria-label="Betsel Stack at a glance">
         <div className="container hm-proof-grid">
-          <div className="rv"><b>Seconds</b><span>from case size to ranked patterns</span></div>
-          <div className="rv"><b>1 click</b><span>to a branded, customer-ready report</span></div>
-          <div className="rv"><b>0</b><span>software to install</span></div>
-          <div className="rv"><b>$29</b><span>a month, or $279 a year</span></div>
+          {PROOF.map(([b, s]) => (
+            <div className="rv" key={b}><b>{b}</b><span>{s}</span></div>
+          ))}
         </div>
       </section>
 
-      {/* ============ POSITIONING ============ */}
+      {/* ============ WHAT WE STAND FOR ============ */}
       <section className="hm-section" id="why">
-        <div className="container hm-pos">
-          <div className="hm-pos-intro rv">
+        <div className="container">
+          <div className="hm-head hm-head--center rv">
             <p className="hm-tag">What we stand for</p>
             <h2 className="hm-h2">
               Focused by design.
-              <br />
               <span className="hm-dim">Powerful where it matters.</span>
             </h2>
             <p className="hm-lede">
               Packaging decisions are complex. The software you use to make them
-              shouldn&rsquo;t be. Every feature in Betsel Stack earns its place
-              by saving an engineer real time on a real load.
+              shouldn&rsquo;t be.
             </p>
           </div>
-          <ol className="hm-pillars">
+          <ul className="hm-pillars">
             {PILLARS.map((p) => (
-              <li className="hm-pillar rv" key={p.n}>
-                <span className="hm-pillar-n">{p.n}</span>
-                <div>
-                  <h3>{p.title}</h3>
-                  <p>{p.body}</p>
-                  <p className="hm-pillar-proof">{p.proof}</p>
-                </div>
+              <li className="hm-pillar rv" key={p.title}>
+                <span className="hm-pillar-icon">{ICONS[p.icon]}</span>
+                <h3>{p.title}</h3>
+                <p>{p.body}</p>
               </li>
             ))}
-          </ol>
+          </ul>
         </div>
       </section>
 
-      {/* ============ CHAPTERS ============ */}
-      {CHAPTERS.map((c, i) => (
-        <section className={`hm-chapter ${i % 2 ? "hm-chapter--alt" : ""}`} key={c.tag}>
-          <div className="container">
-            <div className="hm-head hm-head--center rv">
-              <p className="hm-tag">{c.tag}</p>
-              <h2 className="hm-h2">
-                {c.title[0]}
-                <br />
-                <span className="hm-dim">{c.title[1]}</span>
-              </h2>
-              <p className="hm-lede">{c.body}</p>
-            </div>
-            <figure className={`hm-shot rv ${c.wide ? "hm-shot--wide" : ""} ${c.narrow ? "hm-shot--narrow" : ""}`}>
-              <img src={c.img} alt={c.alt} loading="lazy" decoding="async" />
-            </figure>
-          </div>
-        </section>
-      ))}
-
-      {/* ============ REPORTS ============ */}
-      <section className="hm-section hm-watch">
+      {/* ============ HOW IT WORKS (scroll story) ============ */}
+      <section className="hm-section hm-how" id="how">
         <div className="container">
           <div className="hm-head hm-head--center rv">
-            <p className="hm-tag">Reports</p>
+            <p className="hm-tag">How it works</p>
             <h2 className="hm-h2">
-              From first pattern
-              <br />
-              <span className="hm-dim">to a branded report.</span>
+              From one case
+              <span className="hm-dim">to a full truckload.</span>
             </h2>
             <p className="hm-lede">
-              Build it, check it, load it, and export a pallet pattern
-              engineering report with dimensions, efficiency, stability, and
-              weights, ready for your customer or your floor. No retyping
-              numbers into a spreadsheet.
+              Follow a single case from your screen to the distribution center.
             </p>
           </div>
-          <p className="hm-center rv">
-            <Link href="/software#watch" className="hm-textlink">
-              Watch the full guided tour <span aria-hidden="true">&rarr;</span>
+          <ScrollStory steps={STORY} />
+          <div className="hm-actions rv">
+            <Link href="/signup" className="btn btn--primary hm-btn-lg">
+              Try it on your own case
             </Link>
-          </p>
+            <Link href="/software#watch" className="hm-textlink">
+              Watch the full tour <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* ============ NO BAGGAGE ============ */}
+      {/* ============ WHY SWITCH ============ */}
       <section className="hm-section">
         <div className="container">
           <div className="hm-head rv">
             <p className="hm-tag">Why switch</p>
             <h2 className="hm-h2">
               Powerful tools,
-              <br />
               <span className="hm-dim">without the enterprise baggage.</span>
             </h2>
           </div>
@@ -253,7 +289,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ============ TESTIMONIAL ============ */}
+      {/* ============ FROM THE FIELD ============ */}
       <div className="rv">
         <Testimonial />
       </div>
