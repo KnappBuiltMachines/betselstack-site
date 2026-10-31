@@ -272,7 +272,7 @@ export default function SoftwarePage() {
               <li>
                 <div className="n">02</div>
                 <h3>Pick a pattern</h3>
-                <p>Layouts ranked by efficiency, support, and stability. Choose the best one.</p>
+                <p>Layouts ranked by cases per layer, each with its cubic efficiency and cube. Choose the best one.</p>
                 <span className="arrow">→</span>
               </li>
               <li>
@@ -332,9 +332,9 @@ export default function SoftwarePage() {
                   <h3>The best pattern for your case, first</h3>
                   <p className="body">
                     Enter your case and pallet dimensions and Betsel Stack instantly
-                    generates ranked layouts — each scored by cubic efficiency, case
-                    support, and stability. You start from the best option, not a blank
-                    screen.
+                    generates ranked layouts — the most cases per layer first, each with
+                    a plain-language name, its cubic efficiency, and its unit load +
+                    pallet cube. You start from the best option, not a blank screen.
                   </p>
                   <div className="why">
                     <b>Gives you time back —</b> No repetitive Ti-Hi math or manual
@@ -412,8 +412,8 @@ export default function SoftwarePage() {
                   <p className="body">
                     Compose a custom report from 3D renders, 2D layer diagrams, and case,
                     pallet, and truck stats — then export a polished, branded Pallet
-                    Pattern Engineering Report with dimensions, cubic efficiency, support,
-                    stability, weight breakdowns, and truck loading. Custom-generated to
+                    Pattern Engineering Report with dimensions, cubic efficiency, unit load
+                    + pallet cube, weight breakdowns, and truck loading. Custom-generated to
                     meet your company&rsquo;s standards and ready to print, email, or save.
                   </p>
                   <div className="why">

@@ -123,7 +123,7 @@ export default function TopsProAlternative() {
           />
           <Card
             k="Built this decade"
-            v="Fast pattern generation, stability scoring, and clean PDF reports without a legacy-software learning curve."
+            v="Fast pattern generation, plain-language pattern names, and clean PDF reports without a legacy-software learning curve."
           />
         </div>
       </section>

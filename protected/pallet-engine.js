@@ -236,40 +236,9 @@ function overlapRatio(plsA, plsB){
   return total > 0 ? r2(Math.min(1, overlap / total)) : 0;
 }
 
-// ── Genuine interlock quality (0–1) ─────────────────────────────
-// overlapRatio() above is ~1.0 for ANY two full layers (their footprints
-// almost fully overlap regardless of arrangement), so it cannot tell a
-// real interlock from a column stack. What actually creates interlock is
-// BRIDGING: a case in the alternate layer resting across two or more
-// cases below, tying their seams together. This measures the fraction of
-// layer-B cases that genuinely bridge: supported by >= 2 layer-A cases
-// (each contributing >= 8% of the case's footprint) with no single
-// supporter covering >= 92% (which would mean the case just sits on one
-// case below — column behaviour). A symmetric pattern whose 180° turn is
-// identical to itself scores 0 here, exactly as it should.
-function interlockQuality(plsA, plsB){
-  if(!plsA || !plsB || !plsA.length || !plsB.length) return 0;
-  const B = plsB.length > 250 ? plsB.slice(0, 250) : plsB;
-  let bridged = 0;
-  for(const b of B){
-    const area = b.w * b.l;
-    if(area <= 0) continue;
-    let supporters = 0, maxShare = 0;
-    for(const a of plsA){
-      const ox = Math.max(0, Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x));
-      const oy = Math.max(0, Math.min(a.y+a.l, b.y+b.l) - Math.max(a.y, b.y));
-      const ov = ox * oy;
-      if(ov > area * 0.08) supporters++;
-      if(ov > maxShare) maxShare = ov;
-    }
-    if(supporters >= 2 && maxShare < area * 0.92) bridged++;
-  }
-  return r2(bridged / B.length);
-}
-
 // Largest internal gap in a layer (checked along rows and columns).
 // Big internal gaps break interlock bridging and let cases shift in
-// transit, so they must pull the stability score down.
+// transit (used by the engine's quality gate).
 function maxInternalGapG(pls){
   if(!pls || pls.length < 2) return 0;
   const rk = v => Math.round(v * 100) / 100;
@@ -288,14 +257,6 @@ function maxInternalGapG(pls){
     for(let i=1; i<s.length; i++) mg = Math.max(mg, s[i].y - (s[i-1].y + s[i-1].l));
   });
   return mg;
-}
-
-// Gap fraction = largest internal gap / smallest case dimension in the layer
-function _gapFracOf(pls){
-  if(!pls || !pls.length) return 0;
-  let sm = Infinity;
-  pls.forEach(p => { sm = Math.min(sm, p.w, p.l); });
-  return sm > 0 ? maxInternalGapG(pls) / sm : 0;
 }
 
 function continuousSeamFraction(pls, axis){
@@ -372,103 +333,6 @@ function cubicEfficiency(pls, palW, palL, cH, HI, palH){
   const totalCaseVol = pls.reduce((s,p)=>s+p.w*p.l*cH,0) * HI;
   const loadH = palH + cH * HI;
   return loadH>0 ? r2(totalCaseVol / (palW * palL * loadH) * 100) : 0;
-}
-
-// Case Support % — engineering definition:
-// Layer 1 (on pallet deck): 100% supported by definition.
-// Higher layers: supported area = geometric overlap with cases directly below.
-// Overall = Σ(supported area) / Σ(total bottom area) across ALL layers.
-// Also returns minSupport = worst-case individual case support %.
-function caseSupportPct(pls, palW, palL, edgeOff, HI, plsB){
-  // Build array of layers: layer 0 = pallet deck (pls = Layer A or alternating A/B)
-  // If only Layer A given (no HI), treat as single-layer stack on pallet.
-  if(!pls || !pls.length) return {avg:100, min:100};
-  const hi = HI || 1;
-
-  // Build layer placements: alternate A/B if plsB provided
-  const layerPls = [];
-  for(let lay=0; lay<hi; lay++){
-    layerPls.push((plsB && lay%2===1) ? plsB : pls);
-  }
-
-  // AABB overlap area between two cases
-  const overlapArea = (a, b) => {
-    const ox = Math.max(0, Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x));
-    const oy = Math.max(0, Math.min(a.y+a.l, b.y+b.l) - Math.max(a.y, b.y));
-    return ox * oy;
-  };
-
-  let totalArea = 0, totalSupported = 0, minSupport = 100;
-
-  // Hash cache — at most two distinct layer arrays (A and B); build each
-  // spatial hash once and reuse across all upper layers (exact results,
-  // avoids O(n²) freeze for very small cases / very high counts)
-  const _hashCache = new Map();
-  const _getHash = (arr) => {
-    let h = _hashCache.get(arr);
-    if(!h){ h = _buildRectHash(arr); _hashCache.set(arr, h); }
-    return h;
-  };
-
-  for(let lay=0; lay<hi; lay++){
-    const layer = layerPls[lay];
-    const below = lay>0 ? layerPls[lay-1] : null;
-    const useHash = below && layer.length*below.length > 40000;
-    const belowHash = useHash ? _getHash(below) : null;
-    layer.forEach(c => {
-      const bottom = c.w * c.l;
-      totalArea += bottom;
-      if(lay === 0){
-        // Layer 1: pallet deck provides full support
-        totalSupported += bottom;
-        // (minSupport stays 100 for layer 1 cases)
-      } else {
-        // Higher layers: sum overlap with every case in the layer below
-        let suppArea = 0;
-        if(useHash){
-          suppArea = _hashOverlapArea(belowHash, c);
-        } else {
-          below.forEach(b => { suppArea += overlapArea(c, b); });
-        }
-        // Cap at bottom area (no double-counting)
-        suppArea = Math.min(suppArea, bottom);
-        totalSupported += suppArea;
-        const pct = bottom > 0 ? (suppArea / bottom * 100) : 100;
-        if(pct < minSupport) minSupport = pct;
-      }
-    });
-  }
-
-  const avg = totalArea > 0 ? r2(totalSupported / totalArea * 100) : 100;
-  return { avg: avg, min: r2(minSupport) };
-}
-
-// Stability % — 0–100 composite:
-//   Interlock  45 × Q  where Q is MEASURED interlock quality (0–1): the
-//              fraction of alternate-layer cases that genuinely bridge two
-//              or more cases below. A column stack — or a "alternating"
-//              pattern whose 180° turn is identical to itself — earns 0.
-//   Support    35 × caseSupportPct/100
-//   Centering  15 × weightDistScore/100
-//   Overhang    5 when the load has no overhang
-//   Gap deduction: up to −20 as the largest internal gap approaches half
-//              of the smallest case dimension (gaps break bridging and
-//              let cases walk in transit).
-// interlock arg: pass a 0–1 quality fraction (preferred, from
-// interlockQuality) or a boolean for legacy call sites.
-function newStability(interlock, supportPct, centeringPct, ovW, ovL, gapFrac){
-  const q = interlock === true ? 1
-          : (interlock === false || interlock === undefined || interlock === null) ? 0
-          : Math.max(0, Math.min(1, interlock));
-  const interlockPts = 0.45 * q;
-  const supportPts   = 0.35 * (supportPct/100);
-  const centeringPts = 0.15 * (centeringPct/100);
-  const overhangPts  = (Math.abs(ovW)<0.01 && Math.abs(ovL)<0.01) ? 0.05 : 0;
-  let gapPen = 0;
-  if(typeof gapFrac === 'number' && gapFrac > 0.1){
-    gapPen = 0.20 * Math.min(1, (gapFrac - 0.1) / 0.4);
-  }
-  return r2(Math.max(0, Math.min(100, (interlockPts + supportPts + centeringPts + overhangPts - gapPen) * 100)));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -628,7 +492,7 @@ function _distributeLayer(pls, pW, pL, tight){
 }
 
 // Apply the TIGHT/SPREAD distribution to one pattern object and refresh its
-// geometry-dependent metrics (support, stability, interlock, overhang).
+// geometry-dependent metrics (interlock, overhang).
 // Cubic efficiency is footprint-based and unchanged. Saved/manual patterns
 // are left untouched.
 function _distributePattern(p, pW, pL){
@@ -644,14 +508,10 @@ function _distributePattern(p, pW, pL){
   const mnY=Math.min(...pls.map(q=>q.y)),mxY=Math.max(...pls.map(q=>q.y+q.l));
   const _oxW=r2(((mxX-mnX)-pW)/2),_oxL=r2(((mxY-mnY)-pL)/2);
   const ohW=(pW<=pL)?_oxW:_oxL, ohL=(pW<=pL)?_oxL:_oxW;
-  const supp=caseSupportPct(pls,pW,pL,0,1,plsB||pls);
   const cen=weightDistScore(pls,pW,pL);
-  const ilq=(plsB&&!sameRef)?interlockQuality(pls,plsB):0;
-  const stab=newStability(ilq,supp.avg,cen,ohW,ohL,_gapFracOf(pls));
   const il=plsB?r2(overlapRatio(pls,plsB)*100):0;
   return {...p,placements:pls,placementsB:plsB,ohW,ohL,
-    caseSupportPct:supp.avg,minCaseSupport:supp.min,stability:stab,
-    interlockPct:il,wdA:cen,wdB:cen,_maxGap:maxInternalGapG(pls),_ilq:ilq};
+    interlockPct:il,wdA:cen,wdB:cen,_maxGap:maxInternalGapG(pls)};
 }
 
 // ── Edge-offset wrapper ───────────────────────────────────────
@@ -662,6 +522,114 @@ function _distributePattern(p, pW, pL){
 // Every pattern is built on that one resized perimeter and then centered on the
 // real pallet, so all patterns down the list use the same perimeter and respond
 // to the offset identically.
+// ═══════════════════════════════════════════════════════════════════════
+// PLAIN-LANGUAGE PATTERN NAMES
+// Every name is read off the finished layer itself, so it always matches
+// what the engineer sees in 2D / 3D:
+//   100% Column Stack (0°)                  every case at 0°
+//   100% Column Stack (0°) · 1 offset row   one row holds a case fewer and
+//                                           sits offset from the others
+//   Split 12/5 (0°/90°) · 90° side          12 cases at 0°, 5 at 90°; the
+//                                           90° cases run along one long side
+// Place words describe where the smaller group sits, in pallet terms:
+//   end / both ends   across the short edge(s)     middle  across the middle
+//   side / both sides along the long edge(s)       center  down the center
+//   L-shape           wrapped around one corner    mixed   several groups
+//   rows              several bands through the layer
+// On a square pallet "end" and "side" read as "edge".
+// Same name + same case count in one list → "… (2)", "… (3)"…
+// ═══════════════════════════════════════════════════════════════════════
+function _patternPlace(M, all, pW, pL){
+  // Where the minority-orientation cases sit, in pallet terms
+  // (ends = the short edges, sides = the long edges).
+  const X0=Math.min(...all.map(p=>p.x)), X1=Math.max(...all.map(p=>p.x+p.w));
+  const Y0=Math.min(...all.map(p=>p.y)), Y1=Math.max(...all.map(p=>p.y+p.l));
+  const spanX=X1-X0, spanY=Y1-Y0;
+  const minD=Math.min(...all.map(p=>Math.min(p.w,p.l)));
+  const tol=minD*0.6;
+  const square=Math.abs(pW-pL)<0.5;
+  // a = coordinate along the pallet LENGTH (its longer side), b = across the width
+  const lenIsY=pL>pW;
+  const A=c=>lenIsY?[c.y,c.y+c.l]:[c.x,c.x+c.w];
+  const B=c=>lenIsY?[c.x,c.x+c.w]:[c.y,c.y+c.l];
+  const A0=lenIsY?Y0:X0, A1=lenIsY?Y1:X1, B0=lenIsY?X0:Y0, B1=lenIsY?X1:Y1;
+  // merge cases into bands along one axis
+  const bands=(get)=>{
+    const iv=M.map(c=>({r:get(c),c})).sort((p,q)=>p.r[0]-q.r[0]);
+    const out=[];
+    iv.forEach(({r,c})=>{const t=out[out.length-1]; if(t&&r[0]<=t.hi+tol){t.hi=Math.max(t.hi,r[1]);t.cs.push(c);} else out.push({lo:r[0],hi:r[1],cs:[c]});});
+    return out;
+  };
+  const describe=(bs,get,lo,hi,crossGet,clo,chi,oneWord,twoWord,midWord)=>{
+    // every band must run (nearly) all the way across
+    const full=bs.every(b=>{const r=b.cs.map(crossGet);const mn=Math.min(...r.map(v=>v[0])),mx=Math.max(...r.map(v=>v[1]));return (mx-mn)>=(chi-clo)*0.7;});
+    if(!full) return null;
+    const at0=bs.filter(b=>b.lo-lo<=tol), at1=bs.filter(b=>hi-b.hi<=tol);
+    const mid=bs.filter(b=>!at0.includes(b)&&!at1.includes(b));
+    if(!mid.length) return (at0.length&&at1.length)?twoWord:oneWord;
+    if(!at0.length&&!at1.length) return midWord;
+    return 'rows';
+  };
+  const cross=bands(A);   // bands stacked along the length -> run across the width
+  const along=bands(B);   // bands side by side across the width -> run along the length
+  const endW = square?'edge':'end',   endsW = square?'both edges':'both ends';
+  const sideW= square?'edge':'side',  sidesW= square?'both edges':'both sides';
+  const banded = describe(cross,A,A0,A1,B,B0,B1,endW,endsW,'middle')
+              || describe(along,B,B0,B1,A,A0,A1,sideW,sidesW,'center');
+  if(banded) return banded;
+  // not full bands: a partial group against one edge, or an L in a corner
+  const touch=c=>{const a=A(c),b=B(c);return {e0:a[0]-A0<=tol,e1:A1-a[1]<=tol,s0:b[0]-B0<=tol,s1:B1-b[1]<=tol};};
+  const T=M.map(touch);
+  for(const k of ['s0','s1']) if(T.every(t=>t[k])) return sideW;
+  for(const k of ['e0','e1']) if(T.every(t=>t[k])) return endW;
+  for(const e of ['e0','e1']) for(const sd of ['s0','s1'])
+    if(T.every(t=>t[e]||t[sd])) return 'L-shape';
+  return 'mixed';
+}
+function _plainName(p, pW, pL){
+  const pls=p.placements||[];
+  const n90=pls.filter(c=>c.ori===90).length, n0=pls.length-n90;
+  const raw=p.name||'';
+  if(!n90||!n0){
+    const deg=n90?'90°':'0°';
+    if(/^Brick/.test(raw)) return {name:`Brick (${deg})`, desc:`All ${pls.length} cases at ${deg}, alternate rows offset by half a case like a brick wall.`};
+    // Rows that hold fewer cases than a full row are spread out, so they sit
+    // offset from their neighbours. Count them so each variant reads clearly.
+    const rowsOf=(lo,hi)=>{const sorted=pls.slice().sort((a,b)=>lo(a)-lo(b));const out=[];
+      sorted.forEach(c=>{const t=out[out.length-1]; if(t&&lo(c)<t.hi-0.01){t.n++;t.hi=Math.max(t.hi,hi(c));} else out.push({hi:hi(c),n:1});});return out;};
+    let short=0;
+    for(const [lo,hi] of [[c=>c.y,c=>c.y+c.l],[c=>c.x,c=>c.x+c.w]]){
+      const rows=rowsOf(lo,hi); const full=Math.max(...rows.map(r=>r.n));
+      const k=rows.filter(r=>r.n<full).length; if(k){short=k;break;}
+    }
+    if(short) return {name:`100% Column Stack (${deg}) · ${short} offset row${short>1?'s':''}`,
+      desc:`All ${pls.length} cases at ${deg}. ${short} row${short>1?'s hold':' holds'} one case fewer and ${short>1?'are':'is'} spaced out, so ${short>1?'they sit':'it sits'} offset from the other rows.`};
+    return {name:`100% Column Stack (${deg})`, desc:`All ${pls.length} cases at ${deg}.`};
+  }
+  const minDeg = n90<=n0 ? 90 : 0;
+  const M = pls.filter(c=>c.ori===minDeg);
+  const place = /^Pinwheel/.test(raw) ? 'border' : _patternPlace(M, pls, pW, pL);
+  const name = `Split ${n0}/${n90} (0°/90°) · ${minDeg}° ${place}`;
+  const words={end:'across one end',  'both ends':'across both ends', side:'along one side', 'both sides':'along both sides',
+    edge:'along one edge','both edges':'along two opposite edges', middle:'across the middle', center:'down the center',
+    rows:'in rows spread through the layer', border:'around the outside', 'L-shape':'in an L around one corner', mixed:'in several groups'};
+  const desc = `${pls.length} cases per layer: ${n0} at 0° and ${n90} at 90°. The ${minDeg}° cases sit ${words[place]||place}.`;
+  return {name, desc};
+}
+
+function _applyPlainNames(pats, pW, pL){
+  const seen=new Map();
+  pats.forEach(p=>{
+    if(!p||!p.placements||!p.placements.length||p.saved||p.multiCaseManual) return;
+    const nm=_plainName(p, pW, pL);
+    const key=nm.name+'|'+p.TI;
+    const k=(seen.get(key)||0)+1; seen.set(key,k);
+    p.name = k>1 ? `${nm.name} (${k})` : nm.name;
+    p.desc = nm.desc;
+  });
+  return pats;
+}
+
 function buildPatterns(cW, cL, pW, pL){
   const _OH=(ST.maxOverhang===''||ST.maxOverhang===null||ST.maxOverhang===undefined)?0:parseFloat(ST.maxOverhang)||0;
   const _ohIn=ST.isMetric?_OH/25.4:_OH;
@@ -693,7 +661,7 @@ function buildPatterns(cW, cL, pW, pL){
       p.zoneW=pW; p.zoneL=pL;
     });
   }
-  return pats;
+  return _applyPlainNames(pats||[], pW, pL);
 }
 
 function _bpCore(cW, cL, pW, pL){
@@ -1255,21 +1223,18 @@ function _bpCore(cW, cL, pW, pL){
     const mnX=Math.min(...pls.map(p=>p.x)),mxX=Math.max(...pls.map(p=>p.x+p.w));
     const mnY=Math.min(...pls.map(p=>p.y)),mxY=Math.max(...pls.map(p=>p.y+p.l));
     const _oxW=r2(((mxX-mnX)-pW)/2),_oxL=r2(((mxY-mnY)-pL)/2);const ohW=(pW<=pL)?_oxW:_oxL,ohL=(pW<=pL)?_oxL:_oxW;
-    const supp=caseSupportPct(pls,pW,pL,0,1,plsB);
     const cen=weightDistScore(pls,pW,pL);
-    const ilq=interlockQuality(pls,plsB);
-    const stab=newStability(ilq,supp.avg,cen,ohW,ohL,_gapFracOf(pls));
     const il=r2(overlapRatio(pls,plsB)*100);
     const scat=scatterCount(pls);
     PATS.push({
       name,desc:desc||name,orientDesc:'',
       placements:pls,placementsB:plsB,
       count:TI,TI,TI_B:TI,ohW,ohL,cubicEff:ce,palUtilPct:ce,
-      caseSupportPct:supp.avg,minCaseSupport:supp.min,stability:stab,interlockPct:il,
+      interlockPct:il,
       orisA:'',orisB:'',zoneW:pW,zoneL:pL,ohIn,
       wdA:cen,wdB:cen,masterW:r2(pW),masterL:r2(pL),
       _score:scorePattern(pls)-scat*100,   // tidy patterns outrank scattered ones at equal TI
-      _maxGap:maxInternalGap(pls),_ilq:ilq,_scatter:scat,
+      _maxGap:maxInternalGap(pls),_scatter:scat,
     });
   };
 

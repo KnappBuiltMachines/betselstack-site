@@ -93,7 +93,7 @@ const GROUPS = [
       {
         q: "Is there a free pallet pattern generator?",
         a: [
-          "Free online pallet calculators exist and are genuinely useful for a quick cases-per-layer estimate on a single standard case. They generally stop there \u2014 no mixed-case loads, no custom pallet sizes, no saved work, no stability assessment, and no report you can hand to a customer or put in a spec package.",
+          "Free online pallet calculators exist and are genuinely useful for a quick cases-per-layer estimate on a single standard case. They generally stop there \u2014 no mixed-case loads, no custom pallet sizes, no saved work, no 3D load check, and no report you can hand to a customer or put in a spec package.",
           "For one-off arithmetic, a free calculator is fine. For work that has to be defended, reproduced, and documented, it is not.",
           "Betsel Stack offers a 7-day free trial with full access and no credit card required, which is the practical way to find out whether a full tool is warranted.",
         ],

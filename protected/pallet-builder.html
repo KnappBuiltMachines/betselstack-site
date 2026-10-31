@@ -733,6 +733,33 @@ const cv=val=>toIn(parseFloat(val)||0);
 const wu=()=>ST.isMetric?'kg':'lbs';
 const wt=lbs=>ST.isMetric?r2(lbs*0.453592):r2(lbs);
 const wtFmt=(lbs)=>lbs>0?wt(lbs)+' '+wu():'—';
+// Unit Load + Pallet Cube — the outer box the loaded pallet occupies:
+//   L × W = the larger of the case footprint and the pallet footprint
+//   H     = pallet deck + case stack + slip sheets
+// All inputs in inches; returns cubic inches.
+function ulPalCubeIn3(spanA, spanB, caseStackH){
+  const pal=PALLETS[ST.palletKey];
+  const L=Math.max(Math.max(spanA||0,spanB||0), Math.max(pal.l,pal.w));
+  const W=Math.max(Math.min(spanA||0,spanB||0), Math.min(pal.l,pal.w));
+  const H=pal.h+(caseStackH||0)+getSlipSheetH();
+  return L*W*H;
+}
+// Same, measured straight from a layer's placements.
+function ulPalCubeFromPls(pls, caseStackH){
+  if(!pls||!pls.length) return ulPalCubeIn3(0,0,caseStackH);
+  const sx=Math.max(...pls.map(q=>q.x+q.w))-Math.min(...pls.map(q=>q.x));
+  const sy=Math.max(...pls.map(q=>q.y+q.l))-Math.min(...pls.map(q=>q.y));
+  return ulPalCubeIn3(sx,sy,caseStackH);
+}
+const cubeU=()=>ST.isMetric?'m³':'ft³';
+const cubeNum=in3=>ST.isMetric?(in3*0.000016387064).toFixed(3):(in3/1728).toFixed(2);
+const cubeFmt=in3=>in3>0?cubeNum(in3)+' '+cubeU():'—';
+const cubeLabel=()=>`Unit Load + Pallet Cube (${cubeU()})`;
+// Cube for whatever is on screen now (reads the live stats).
+function currentUlPalCube(){
+  const s=ST.stats; if(!s) return 0;
+  return ulPalCubeIn3(s.unitLoadL_in, s.unitLoadW_in, s.caseStackH_in);
+}
 
 </script>
 
@@ -872,13 +899,13 @@ function calculate(){
         ovW:dp(b.ohW),ovL:dp(b.ohL),
         TI:b.TI,HI:maxL,caseCount:b.TI*maxL,perLayer:b.TI,layers:maxL,
         cubicEff:b.cubicEff,palUtilPct:b.cubicEff,
-        stability:b.stability,interlockPct:b.interlockPct||0,
-        caseSupportPct:b.caseSupportPct,minCaseSupport:b.minCaseSupport,
+        interlockPct:b.interlockPct||0,
         patName:b.name,alternating:!!(b.placementsB&&b.placementsB!==b.placements),
         _cH:cH,_cW:cW,_cL:cL,
-        unitLoadW_in:initMxX-initMnX,unitLoadL_in:initMxY-initMnY,
+        // L = longest span, W = shortest (same convention as leUpdateStats)
+        unitLoadW_in:Math.min(initMxX-initMnX,initMxY-initMnY),unitLoadL_in:Math.max(initMxX-initMnX,initMxY-initMnY),
         caseStackH_in:cH*maxL,
-        unitLoadW:dp(initMxX-initMnX),unitLoadL:dp(initMxY-initMnY),
+        unitLoadW:dp(Math.min(initMxX-initMnX,initMxY-initMnY)),unitLoadL:dp(Math.max(initMxX-initMnX,initMxY-initMnY)),
         overLimit:hasMaxH&&tH>maxHin,
         ohUnsafe:Math.abs(b.ohW)>ohIn2+0.01||Math.abs(b.ohL)>ohIn2+0.01,
         weightDist:r2((wdA+wdB)/2),
@@ -902,8 +929,7 @@ function calculate(){
       placements:[],placementsB:null,
       count:0,TI:0,TI_B:0,
       ohW:0,ohL:0,cubicEff:0,palUtilPct:0,
-      caseSupportPct:0,minCaseSupport:0,
-      stability:0,interlockPct:0,
+      interlockPct:0,
       orisA:'—',orisB:'—',
       zoneW:pW,zoneL:pL,ohIn:0,
       wdA:0,wdB:0,masterW:dp(pW),masterL:dp(pL),
@@ -921,11 +947,11 @@ function calculate(){
       palW:dp(pW),palL:dp(pL),palH:dp(pH),totalH:dp(tH2),
       ovW:'0',ovL:'0',
       TI:0,HI:maxL2,caseCount:0,perLayer:0,layers:maxL2,
-      cubicEff:'0',palUtilPct:0,stability:0,interlockPct:0,
+      cubicEff:'0',palUtilPct:0,interlockPct:0,
       patName:'Manual Build',alternating:false,
       _cH:cH0,_cW:cv(c0.w),_cL:cv(c0.l),
-      unitLoadW_in:pW,unitLoadL_in:pL,caseStackH_in:cH0*maxL2,
-      unitLoadW:dp(pW),unitLoadL:dp(pL),
+      unitLoadW_in:Math.min(pW,pL),unitLoadL_in:Math.max(pW,pL),caseStackH_in:cH0*maxL2,
+      unitLoadW:dp(Math.min(pW,pL)),unitLoadL:dp(Math.max(pW,pL)),
       multiCase:true,caseCount_mc:valid.length,multiCaseManual:true,
     };
   }
@@ -1177,6 +1203,59 @@ function oriColor(ori, baseHex){
 }
 
 let _draw2DRafId = null;
+// ── Crisp canvas helpers ─────────────────────────────────────────
+// The 2D and Truck views draw in CSS pixels but keep a backing store at
+// least 2× (up to 3×) the on-screen size, so lines and text stay sharp on
+// Retina / high-DPI screens and in exported images. Mouse hit-testing is
+// unchanged because the CSS size (and so the drawing coordinates) is.
+const _canvasDPR=()=>Math.max(2,Math.min(3,window.devicePixelRatio||1));
+function _hiDPI2D(cv){
+  const lw=cv._lw||cv.width, lh=cv._lh||cv.height, dpr=_canvasDPR();
+  const W=Math.round(lw*dpr), H=Math.round(lh*dpr);
+  if(cv.width!==W||cv.height!==H){ cv.width=W; cv.height=H; }
+  cv._lw=lw; cv._lh=lh; cv._dpr=dpr;
+  cv.style.width=lw+'px'; cv.style.height=lh+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.imageSmoothingQuality='high';
+  return ctx;
+}
+// Rounded rectangle path (falls back to a plain rect on old browsers).
+function _rrPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  if(r>0&&ctx.roundRect) ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h);
+}
+// Lighten (+) or darken (−) a #rrggbb colour by a fraction.
+function _shadeHex(hex,amt){
+  const h=String(hex||'#3A7BD5').replace('#','');
+  if(h.length<6) return hex;
+  const ch=i=>{const v=parseInt(h.slice(i,i+2),16);return Math.round(amt<0?v*(1+amt):v+(255-v)*amt);};
+  return '#'+[0,2,4].map(i=>Math.max(0,Math.min(255,ch(i))).toString(16).padStart(2,'0')).join('');
+}
+function _isLightHex(hex){
+  const h=String(hex||'').replace('#',''); if(h.length<6) return false;
+  const [r,g,b]=[0,2,4].map(i=>parseInt(h.slice(i,i+2),16)/255);
+  return 0.2126*r+0.7152*g+0.0722*b>0.62;
+}
+// One case drawn as a softly lit block: drop shadow, light-to-dark face,
+// crisp darker edge, inner highlight. Shared by the 2D and Truck views.
+function _drawCaseBlock(ctx,x,y,w,h,col,opts){
+  opts=opts||{};
+  const r=Math.max(0,Math.min(opts.radius!==undefined?opts.radius:2.5,w*0.08,h*0.08));
+  if(opts.shadow!==false && w>4 && h>4){
+    ctx.fillStyle='rgba(16,32,58,.20)'; _rrPath(ctx,x+0.8,y+1.6,w,h,r); ctx.fill();
+  }
+  const g=ctx.createLinearGradient(x,y,x+w*0.4,y+h);
+  g.addColorStop(0,_shadeHex(col,0.16)); g.addColorStop(0.55,col); g.addColorStop(1,_shadeHex(col,-0.14));
+  ctx.fillStyle=g; _rrPath(ctx,x,y,w,h,r); ctx.fill();
+  if(w>8&&h>8){
+    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=1;
+    _rrPath(ctx,x+1.5,y+1.5,w-3,h-3,Math.max(0,r-1)); ctx.stroke();
+  }
+  ctx.strokeStyle=_shadeHex(col,-0.5); ctx.lineWidth=opts.edge||1;
+  _rrPath(ctx,x+0.5,y+0.5,w-1,h-1,r); ctx.stroke();
+}
+
 function draw2D(){
   // During drag: throttle to rAF for smooth 60fps
   if(LE.dragging){
@@ -1195,19 +1274,38 @@ function _draw2DImmediate(){
   // Route to side elevation view if a side is selected
   if(LE.sideView){ drawSideView(LE.sideView); return; }
 
-  const cv2=document.getElementById('c2d'),ctx=cv2.getContext('2d');
+  const cv2=document.getElementById('c2d'),ctx=_hiDPI2D(cv2);
+  const CW=cv2._lw, CH=cv2._lh;
   const pal=PALLETS[ST.palletKey],pW=pal.w,pL=pal.l;
-  const PAD=64,cw2=cv2.width-PAD*2,ch2=cv2.height-PAD*2;
-  ctx.clearRect(0,0,cv2.width,cv2.height);
+  const PAD=64,cw2=CW-PAD*2,ch2=CH-PAD*2;
+  ctx.clearRect(0,0,CW,CH);
+  // Soft studio background with a faint grid, matching the 3D view
+  const bgG=ctx.createLinearGradient(0,0,0,CH);
+  bgG.addColorStop(0,'#f4f6f9'); bgG.addColorStop(1,'#e6eaf0');
+  ctx.fillStyle=bgG; ctx.fillRect(0,0,CW,CH);
+  ctx.strokeStyle='rgba(40,60,90,.06)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=0.5;gx<CW;gx+=24){ctx.moveTo(gx,0);ctx.lineTo(gx,CH);}
+  for(let gy=0.5;gy<CH;gy+=24){ctx.moveTo(0,gy);ctx.lineTo(CW,gy);}
+  ctx.stroke();
   const baseSc=Math.min(cw2/pW,ch2/pL);
   const sc=baseSc*_2dZoom;
   const ox=PAD+(cw2-pW*sc)/2,oy=PAD+(ch2-pL*sc)/2;
   // Store scale+origin for layer editor hit-testing
   LE.sc=sc; LE.ox=ox; LE.oy=oy;
 
-  // pallet boards
-  for(let i=0;i<9;i++){ctx.fillStyle=i%2===0?'#d4af65':'#c9a458';ctx.fillRect(ox,oy+(pL*sc/9)*i,pW*sc,pL*sc/9-.5);}
-  ctx.strokeStyle='#7a5c1e';ctx.lineWidth=2;ctx.strokeRect(ox,oy,pW*sc,pL*sc);
+  // pallet: soft drop shadow, then deck boards with dark gaps between them
+  ctx.fillStyle='rgba(20,30,50,.16)'; _rrPath(ctx,ox+3,oy+5,pW*sc,pL*sc,3); ctx.fill();
+  ctx.fillStyle='#6e5020'; _rrPath(ctx,ox,oy,pW*sc,pL*sc,3); ctx.fill();
+  const nB=9, bH=pL*sc/nB, gap=Math.max(1,bH*0.12);
+  for(let i=0;i<nB;i++){
+    const by=oy+bH*i+gap/2, bh=bH-gap;
+    const wg=ctx.createLinearGradient(0,by,0,by+bh);
+    const base=i%2===0?'#d8b56c':'#cfa95c';
+    wg.addColorStop(0,_shadeHex(base,0.12)); wg.addColorStop(1,_shadeHex(base,-0.08));
+    ctx.fillStyle=wg; ctx.fillRect(ox+1,by,pW*sc-2,bh);
+  }
+  ctx.strokeStyle='#6b4f1d';ctx.lineWidth=1.5;_rrPath(ctx,ox+0.75,oy+0.75,pW*sc-1.5,pL*sc-1.5,3);ctx.stroke();
 
   // Determine which placements to show — always use numeric layer index
   const pat = !ST.multiMode && ST.patterns.length>0 ? ST.patterns[ST.selPat] : null;
@@ -1229,31 +1327,27 @@ function _draw2DImmediate(){
     const col=getPlacementColor(p, true);
     const isSel = isEditing && LE.selectedSet.has(idx);
     const isDragOverlap = isEditing && isSel && LE.dragging && LE._dragOverlapping;
-    // Base fill
-    ctx.fillStyle=col; ctx.fillRect(x,y,w,h);
+    // Lit case block
+    _drawCaseBlock(ctx,x,y,w,h,col,{shadow:!LE.dragging||!isSel});
     // Tint overlay
     if(isSel && isDragOverlap){
-      ctx.fillStyle='rgba(220,50,50,.35)'; ctx.fillRect(x,y,w,h);
+      ctx.fillStyle='rgba(220,50,50,.35)'; _rrPath(ctx,x,y,w,h,2.5); ctx.fill();
     } else if(isSel){
-      ctx.fillStyle='rgba(255,255,0,.20)'; ctx.fillRect(x,y,w,h);
+      ctx.fillStyle='rgba(255,230,0,.22)'; _rrPath(ctx,x,y,w,h,2.5); ctx.fill();
     }
-    // Shading edges
-    ctx.fillStyle='rgba(0,0,0,.1)';ctx.fillRect(x,y,w,4);ctx.fillRect(x,y,4,h);
-    ctx.fillStyle='rgba(255,255,255,.13)';ctx.fillRect(x+w-4,y,4,h);ctx.fillRect(x,y+h-4,w,4);
-    // Border
+    // Selection outline
     if(isSel && isDragOverlap){
-      ctx.strokeStyle='#ff4444';ctx.lineWidth=2.5;ctx.strokeRect(x-1,y-1,w+2,h+2);
+      ctx.strokeStyle='#ff4444';ctx.lineWidth=2.5;_rrPath(ctx,x-1,y-1,w+2,h+2,3);ctx.stroke();
     } else if(isSel){
-      ctx.strokeStyle='#FFD700';ctx.lineWidth=2.5;ctx.strokeRect(x-1,y-1,w+2,h+2);
-    } else {
-      ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+      ctx.strokeStyle='#FFD700';ctx.lineWidth=2.5;_rrPath(ctx,x-1,y-1,w+2,h+2,3);ctx.stroke();
     }
-    // Label
-    if(w>18&&h>11){
-      ctx.fillStyle=isSel?'rgba(0,0,0,.9)':'rgba(0,0,0,.65)';
-      ctx.font=`bold ${Math.max(5,Math.min(8,w/5))}px monospace`;
+    // Label — sized to the case, light or dark text for contrast
+    if(w>22&&h>13){
+      const fs=Math.max(8,Math.min(13,w/5.5,h/2.6));
+      ctx.font=`600 ${fs}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
+      ctx.fillStyle=_isLightHex(col)?'rgba(10,20,35,.78)':'rgba(255,255,255,.94)';
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(ST.multiMode?p.label:(ST.isMetric?`${r2(p.w*25.4)}×${r2(p.l*25.4)}`:`${r2(p.w)}×${r2(p.l)}`),x+w/2,y+h/2);
+      ctx.fillText(ST.multiMode?p.label:(ST.isMetric?`${r2(p.w*25.4)}×${r2(p.l*25.4)}`:`${r2(p.w)}×${r2(p.l)}`),x+w/2,y+h/2+0.5);
     }
   }
 
@@ -1436,7 +1530,7 @@ function _draw2DImmediate(){
       ctx.closePath();ctx.fill();
     });
     // Label background pill for readability
-    ctx.font='bold 13px monospace';
+    ctx.font='600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
     const tw=ctx.measureText(lbl).width;
     const lx=(x1+x2)/2, ly=above?Math.min(y1,y2)-8:Math.max(y1,y2)+16;
     ctx.fillStyle='rgba(255,255,255,.88)';
@@ -1452,11 +1546,11 @@ function _draw2DImmediate(){
 
   if(!ST.multiMode&&ST.patterns.length>0){
     const pat=ST.patterns[ST.selPat];
-    ctx.fillStyle='#1a2535';ctx.font='bold 9px monospace';ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillStyle='#1a2535';ctx.font='600 11px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
     const altNote=pat.placementsB?' [ALT LAYERS]':'';
     ctx.fillText(`▦ ${pat.name}${altNote}  ${pat.count}/layer × ${ST.layers} = ${pat.count*ST.layers}  ${pat.cubicEff}% eff`,ox,3);
-    if(pat.ohW>.01){ctx.fillStyle='#c0392b';ctx.textBaseline='bottom';ctx.fillText(`OH-W:+${dp(pat.ohW)}${u()}`,ox,cv2.height-3);}
-    if(pat.ohL>.01){ctx.fillStyle='#c0392b';ctx.fillText(`OH-L:+${dp(pat.ohL)}${u()}`,ox+200,cv2.height-3);}
+    if(pat.ohW>.01){ctx.fillStyle='#c0392b';ctx.textBaseline='bottom';ctx.fillText(`OH-W:+${dp(pat.ohW)}${u()}`,ox,CH-3);}
+    if(pat.ohL>.01){ctx.fillStyle='#c0392b';ctx.fillText(`OH-L:+${dp(pat.ohL)}${u()}`,ox+200,CH-3);}
 
   }
 
@@ -1981,7 +2075,8 @@ function leSelectSide(side){
 
 // Draw a 2D elevation view (read-only) — SIDE A = long/width face, SIDE B = short/length face
 function drawSideView(side){
-  const cv2=document.getElementById('c2d'), ctx=cv2.getContext('2d');
+  const cv2=document.getElementById('c2d'), ctx=_hiDPI2D(cv2);
+  const CW=cv2._lw, CH=cv2._lh;
   const pal=PALLETS[ST.palletKey];
   const pW=pal.w, pL=pal.l, pH=pal.h;
   const valid=ST.cases.filter(c=>cv(c.w)>0&&cv(c.l)>0&&cv(c.h)>0);
@@ -1994,16 +2089,16 @@ function drawSideView(side){
   const totalH = pH + cH * HI;          // total stack height
 
   const PAD=64;
-  const cw2=cv2.width-PAD*2, ch2=cv2.height-PAD*2;
+  const cw2=CW-PAD*2, ch2=CH-PAD*2;
   const baseSc=Math.min(cw2/sideW, ch2/totalH);
   const sc=baseSc*_2dZoom;
   const ox=PAD+(cw2-sideW*sc)/2;
   const oy=PAD+(ch2-totalH*sc)/2;
 
-  ctx.clearRect(0,0,cv2.width,cv2.height);
+  ctx.clearRect(0,0,CW,CH);
 
   // Background
-  ctx.fillStyle='#e8ecf0'; ctx.fillRect(0,0,cv2.width,cv2.height);
+  ctx.fillStyle='#e8ecf0'; ctx.fillRect(0,0,CW,CH);
 
   // Title
   ctx.fillStyle='#1a2535'; ctx.font='bold 11px monospace';
@@ -2011,9 +2106,9 @@ function drawSideView(side){
   ctx.fillText(side==='A'
     ? `SIDE A — Long Face  (${ST.isMetric?r2(pW*25.4)+' mm':pW+'"'} wide)`
     : `SIDE B — Short Face  (${ST.isMetric?r2(pL*25.4)+' mm':pL+'"'} wide)`,
-    cv2.width/2, 4);
+    CW/2, 4);
   ctx.fillStyle='#5577aa'; ctx.font='9px monospace';
-  ctx.fillText('READ-ONLY — Use LAYER A / LAYER B to edit', cv2.width/2, 18);
+  ctx.fillText('READ-ONLY — Use LAYER A / LAYER B to edit', CW/2, 18);
 
   // ── Pallet deck ───────────────────────────────────────────────
   const deckY = oy + totalH*sc - pH*sc;
@@ -2782,22 +2877,12 @@ function leUpdateStats(){
   const wdB   = plsB ? weightDistScore(plsB, pal.w, pal.l) : wdA;
   const wdAvg = r2((wdA+wdB)/2);
 
-  // Case Support %
-  const edgeOff3 = (ST.maxOverhang===''||ST.maxOverhang===null) ? 0 : Math.abs(parseFloat(ST.maxOverhang)||0);
-  const edgeOff3in = ST.isMetric ? edgeOff3/25.4 : edgeOff3;
-  const _supp3 = caseSupportPct(plsA, pal.w, pal.l, edgeOff3in, HI, plsB);
-  const supportPct3 = _supp3.avg;
-  const minSupport3 = _supp3.min;
-  // Interlock (for stability)
+  // Interlock (layer-to-layer overlap)
   const interlockPct = hasB && plsB ? overlapRatio(plsA, plsB)*100 : 0;
 
   // Seam quality
   const seamFracA = pat.seamFracA !== undefined ? pat.seamFracA : 0.5;
   const seamFracB = plsB && pat.seamFracB !== undefined ? pat.seamFracB : seamFracA;
-
-  // Stability
-  const stability3 = newStability((hasB && plsB) ? interlockQuality(plsA, plsB) : 0, supportPct3, wdA, ovW, ovL, _gapFracOf(plsA));
-  const stability = TI !== pat.TI ? stability3 : (pat.stability !== undefined ? pat.stability : stability3);
 
   // Pattern name
   const patName = TI !== pat.TI
@@ -2815,11 +2900,11 @@ function leUpdateStats(){
     caseCount:totalCases, totalCases,
     HI, layers:HI,
     ovW, ovL,
-    cubicEff, palUtilPct:cubicEff, caseSupportPct:supportPct3, minCaseSupport:minSupport3,
+    cubicEff, palUtilPct:cubicEff,
     totalH:dp(totalH),
     unitLoadW_in:ulShort, unitLoadL_in:ulLong, caseStackH_in:caseStackH,
     unitLoadW:dp(ulShort), unitLoadL:dp(ulLong),
-    seamFracA, seamFracB, stability,
+    seamFracA, seamFracB,
     orisA, orisB,
     alternating:hasB&&!!plsB,
     ohUnsafe:false,
@@ -2886,8 +2971,6 @@ function leSavePattern(){
   const interlockPct = r2(overlapRatio(edA, edB)*100);
   const seamFracA = continuousSeamFraction(edA,'x');
   const seamFracB = continuousSeamFraction(edB,'x');
-  const _suppSv = caseSupportPct(edA, pal.w, pal.l, 0, ST.stats.HI||2, edB);
-  const stability = newStability(interlockQuality(edA, edB), _suppSv.avg, r2((wdA+wdB)/2), ohW, ohL, _gapFracOf(edA));
   const orisA = [...new Set(edA.map(p=>p.ori||0))].sort().join('°, ')+'°';
   const orisB = [...new Set(edB.map(p=>p.ori||0))].sort().join('°, ')+'°';
 
@@ -2902,7 +2985,7 @@ function leSavePattern(){
     placementsB: edB,              // Layer B alternates
     TI: edA.length,
     count: edA.length,
-    cubicEff, ohW, ohL, stability, wdA, wdB,
+    cubicEff, ohW, ohL, wdA, wdB,
     interlockPct, seamFracA, seamFracB,
     orisA, orisB,
   };
@@ -3621,7 +3704,7 @@ function buildReportData(){
     wdA:s&&s.wdA!==undefined?s.wdA+'%':'—',
     wdB:s&&s.wdB!==undefined?s.wdB+'%':'—',
     wdAvg:s&&s.wdAvg!==undefined?s.wdAvg+'%':'—',
-    stability:s&&s.stability!==undefined?s.stability+'%':'—',
+    ulPalCube:cubeFmt(currentUlPalCube()),
     totalCaseWeight:totalCaseWeight>0?wtFmt(totalCaseWeight):'—',
     palletTareWeight:wt(palletTareWeight)+' '+wu(),
     totalPalletWeight:totalCaseWeight>0?wtFmt(totalPalletWeight):'—',
@@ -4186,11 +4269,11 @@ function _doPDF(){
     return 24; // content start Y
   };
 
-  const secBar=(label,y,w)=>{
-    w=w||PW-2*M;
-    doc.setFillColor(...ORNG); doc.rect(M,y,w,5.5,'F');
+  const secBar=(label,y,w,x)=>{
+    w=w||PW-2*M; x=(x===undefined)?M:x;
+    doc.setFillColor(...ORNG); doc.rect(x,y,w,5.5,'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...DARK);
-    doc.text(label.toUpperCase(),M+2,y+3.8);
+    doc.text(label.toUpperCase(),x+2,y+3.8);
     return y+5.5;
   };
   const card=(x,y,w,h)=>{
@@ -4241,7 +4324,7 @@ function _doPDF(){
   doc.setTextColor(...ORNG);
   doc.text(D.patName||'Pallet Pattern', M+4, y+7);
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(200,200,200);
-  const execSummary = `Pattern: ${D.patName||'—'}  ·  Cases/Layer: ${D.TI||'—'}  ·  Layers: ${D.HI||'—'}  ·  Total Cases: ${D.totalCases||'—'}  ·  Cubic Efficiency: ${D.cubeEff||'—'}  ·  Stability: ${D.stability||'—'}`;
+  const execSummary = `Pattern: ${D.patName||'—'}  ·  Cases/Layer: ${D.TI||'—'}  ·  Layers: ${D.HI||'—'}  ·  Total Cases: ${D.totalCases||'—'}  ·  Cubic Efficiency: ${D.cubeEff||'—'}  ·  ${cubeLabel()}: ${D.ulPalCube||'—'}`;
   doc.text(execSummary, M+4, y+13, {maxWidth:PW-2*M-8});
   const projLine = [D.project, D.descTxt].filter(Boolean).join('  ·  ');
   if(projLine){ doc.setFontSize(6.5); doc.setTextColor(...GREY); doc.text(projLine, M+4, y+18.5, {maxWidth:PW-2*M-8}); }
@@ -4257,7 +4340,7 @@ function _doPDF(){
     {l:'Layers High',    v:D.HI,                   u:'HI'},
     {l:'Total Cases',    v:D.totalCases,            u:'units', c:[100,180,255]},
     {l:'Cubic Eff',      v:D.cubeEff,               u:'efficiency', c:[100,220,130]},
-    {l:'Stability',      v:D.stability,             u:'score', c:[180,140,255]},
+    {l:'UL+Pallet Cube', v:(D.ulPalCube||'—').replace(/ (ft³|m³)$/,''), u:cubeU(), c:[180,140,255]},
     {l:'Pallets/Truck',  v:D.palletsPerTruck,       u:'pallets', c:[255,180,80]},
   ];
   kpis.forEach((k,i)=>{ kpiBox(M+i*(kpiW+kpiGap),y,kpiW,kpiH,k.l,k.v,k.u,k.c?k.c:null); });
@@ -4275,6 +4358,7 @@ function _doPDF(){
     ['Case Weight', D.caseWeight],
     ['Unit Load Dims', D.unitLoadDims],
     ['Unit Load + Pallet', D.palletDims],
+    [cubeLabel(), D.ulPalCube],
     ['Overhang Length', D.ovL],
     ['Overhang Width', D.ovW],
     ['Pallet Weight', D.totalPalletWeight],
@@ -4283,13 +4367,10 @@ function _doPDF(){
   let ry=y; rows1.forEach((r,i)=>{ ry=dRow(r[0],r[1],M,ry,COL1W,6.5,i); });
 
   // Metric bars (right)
-  const perfY=y;
-  y = secBar('Performance Overview', perfY, COL2W);
+  const perfY=y-5.5;   // same row as the Key Pallet Metrics bar, right column
+  y = secBar('Performance Overview', perfY, COL2W, COL2X);
   const bars=[
     {l:'Cubic Efficiency',      v:parseFloat(D.cubeEff)||0,        c:null},
-    {l:'Case Support (avg)',     v:s&&s.caseSupportPct||0,          c:[100,180,255]},
-    {l:'Case Support (min)',     v:s&&s.minCaseSupport||0,          c:[255,160,80]},
-    {l:'Stability Score',        v:parseFloat(D.stability)||0,      c:[180,140,255]},
     {l:'Interlock Score',        v:s&&s.interlockPct||0,            c:[100,220,130]},
   ];
   let by2=y+4;
@@ -4448,19 +4529,19 @@ function _doPDF(){
   ];
   utilRows.forEach((r,i)=>{ ay=dRow(r[0],r[1],ax,ay,aW,6.5,i); });
 
-  // STABILITY ANALYSIS
+  // UNIT LOAD & CUBE
   ax=M+aW+4; ay=y;
   card(ax,ay,aW,aH);
   doc.setFillColor(180,140,255); doc.rect(ax,ay,aW,5,'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(...DARK);
-  doc.text('STABILITY ANALYSIS',ax+2,ay+3.4); ay+=5;
-  const stabRows=[
-    ['Stability Score', D.stability],
-    ['Case Support (avg)', s&&s.caseSupportPct!==undefined?s.caseSupportPct+'%':'—'],
-    ['Case Support (min)', s&&s.minCaseSupport!==undefined?s.minCaseSupport+'%':'—'],
+  doc.text('UNIT LOAD & CUBE',ax+2,ay+3.4); ay+=5;
+  const cubeRows=[
+    [cubeLabel(), D.ulPalCube],
+    ['Unit Load + Pallet', D.palletDims],
+    ['Unit Load Dims', D.unitLoadDims],
     ['Overhang L', D.ovL], ['Overhang W', D.ovW],
   ];
-  stabRows.forEach((r,i)=>{ ay=dRow(r[0],r[1],ax,ay,aW,6.5,i); });
+  cubeRows.forEach((r,i)=>{ ay=dRow(r[0],r[1],ax,ay,aW,6.5,i); });
 
   y+=aH+4;
 
@@ -4486,11 +4567,14 @@ function _doPDF(){
   doc.setFillColor(255,180,80); doc.rect(ax,ay,aW,5,'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(...DARK);
   doc.text('TRANSPORTATION ASSESSMENT',ax+2,ay+3.4); ay+=5;
-  const truckEff = trkLastResult.totalPallets>0?r2(trkLastResult.totalPallets/(Math.floor(TRK.dims.L/PALLETS[ST.palletKey].l)*Math.floor(TRK.dims.W/PALLETS[ST.palletKey].w)*TRK.stacks)*100):0;
+  // Floor utilization: share of the trailer floor covered by pallet footprints
+  const _pk=PALLETS[ST.palletKey];
+  const truckEff = trkLastResult.totalPallets>0
+    ? r2(Math.min(100,(trkLastResult.palCols||0)*(trkLastResult.palRows||0)*_pk.w*_pk.l/(TRK.dims.L*TRK.dims.W)*100)) : 0;
   const tRows2=[
     ['Truck Type',         D.truckType],
     ['Pallets per Truck',  String(D.palletsPerTruck)],
-    ['Truck Utilization',  trkLastResult.totalPallets>0?truckEff+'%':'—'],
+    ['Floor Utilization',  trkLastResult.totalPallets>0?truckEff+'%':'—'],
     ['Stacking',           trkLastResult.totalPallets>0?(TRK.stacks===1?'Single':TRK.stacks===2?'Double':'Triple'):'—'],
     ['Total Weight',       D.totalWeightPallets],
   ];
@@ -4503,9 +4587,6 @@ function _doPDF(){
     y = secBar('AI-Generated Engineering Recommendations', y);
     const pal=PALLETS[ST.palletKey];
     const cubicV=parseFloat(D.cubeEff)||0;
-    const stabV=parseFloat(D.stability)||0;
-    const suppV=s&&s.caseSupportPct||0;
-    const minSuppV=s&&s.minCaseSupport||0;
     const recs=[];
 
     // Generate contextual recommendations from data
@@ -4513,12 +4594,9 @@ function _doPDF(){
     else if(cubicV>=85) recs.push({level:'✓ OPTIMAL', text:`Cubic efficiency of ${cubicV}% is excellent. This configuration maximises trailer utilisation.`});
     else recs.push({level:'ℹ GOOD', text:`Cubic efficiency of ${cubicV}% is acceptable. Minor adjustments to case dimensions or overhang could yield 2–5% improvement.`});
 
-    if(stabV<70) recs.push({level:'⚠ CONCERN', text:`Stability score of ${stabV}% is low. Consider switching to an interlocking pattern (Interlock-1 through 6) to improve load integrity.`});
-    else if(!hasInterlock) recs.push({level:'ℹ NOTE', text:'Column stack pattern used. Load integrity relies on unit load tie. Consider adding a slip sheet between every 2 layers to improve stability.'});
+    if(!hasInterlock) recs.push({level:'ℹ NOTE', text:'Column stack pattern used. Load integrity relies on unit load tie. Consider adding a slip sheet between every 2 layers to improve stability.'});
     else recs.push({level:'✓ GOOD', text:`Interlock pattern provides ${s?r2(s.interlockPct||0)+'% brick-bond overlap':'alternating layer interlock'}, significantly improving compression resistance.`});
 
-    if(minSuppV<80) recs.push({level:'⚠ CONCERN', text:`Minimum case support of ${minSuppV}% indicates at least one case has significant unsupported area. Review case placement on edges — consider reducing overhang or adjusting edge offset.`});
-    else if(suppV>=95) recs.push({level:'✓ OPTIMAL', text:`Case support average ${suppV}% / minimum ${minSuppV}% — all cases are well supported throughout the stack.`});
 
     if(trkLastResult.totalPallets>0){
       const palletsPerTruckN=parseInt(D.palletsPerTruck)||0;
@@ -4527,7 +4605,7 @@ function _doPDF(){
 
     if(parseFloat(ST.maxOverhang||0)>1.5) recs.push({level:'⚠ CONCERN', text:`Edge offset of ${dp(parseFloat(ST.maxOverhang))} ${u()} exceeds recommended 1" maximum for most transit modes. Verify with carrier guidelines.`});
 
-    if(!recs.length) recs.push({level:'✓ OPTIMAL', text:'No critical concerns identified. Pattern meets standard engineering criteria for stability, utilisation, and transportation.'});
+    if(!recs.length) recs.push({level:'✓ OPTIMAL', text:'No critical concerns identified. Pattern meets standard engineering criteria for utilisation and transportation.'});
 
     const recColors={'⚠ CONCERN':[255,100,100],'✓ OPTIMAL':[100,220,130],'✓ GOOD':[100,220,130],'ℹ NOTE':[100,180,255],'ℹ GOOD':[100,180,255]};
     recs.forEach((rec,i)=>{
@@ -4536,7 +4614,7 @@ function _doPDF(){
       doc.setFillColor(35,35,35); doc.rect(M,y,PW-2*M,12,'F');
       doc.setFillColor(lr,lg,lb); doc.rect(M,y,2,12,'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(lr,lg,lb);
-      doc.text(rec.level,M+4,y+4.5);
+      doc.text(rec.level.replace(/^[^A-Za-z]+/,''),M+4,y+4.5);   // the PDF font has no ✓ / ⚠ / ℹ glyphs
       doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(...LIGHT);
       doc.text(rec.text,M+4,y+9.5,{maxWidth:PW-2*M-6});
       doc.setDrawColor(55,55,55); doc.setLineWidth(0.15); doc.line(M,y+12,M+PW-2*M,y+12);
@@ -4552,7 +4630,7 @@ function _doPDF(){
     doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...ORNG);
     doc.text('REPORT SUMMARY', M+4, y+5);
     doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(...GREY);
-    const summaryLine=`${D.patName||'Pattern'}  ·  TI: ${D.TI}  ·  HI: ${D.HI}  ·  Total: ${D.totalCases} cases  ·  ${D.cubeEff} cubic eff  ·  ${D.stability} stability  ·  ${D.palletsPerTruck} pallets/truck`;
+    const summaryLine=`${D.patName||'Pattern'}  ·  TI: ${D.TI}  ·  HI: ${D.HI}  ·  Total: ${D.totalCases} cases  ·  ${D.cubeEff} cubic eff  ·  ${D.ulPalCube} UL+pallet cube  ·  ${D.palletsPerTruck} pallets/truck`;
     doc.text(summaryLine, M+4, y+10.5, {maxWidth:PW-2*M-8});
     if(PREP){ doc.setFont('helvetica','italic'); doc.text(`Prepared by: ${PREP}`, M+4, y+15.5); }
     doc.setFont('helvetica','normal'); doc.text(D.dateStr||new Date().toLocaleDateString(), PW-M, y+15.5, {align:'right'});
@@ -4695,31 +4773,27 @@ function _doExcelJS(D, img3d, imgLayA, imgLayB){
 //Row 29
 [LBL('Cubic Efficiency %'),EV(),LBL(''),VAL(D.cubeEff||''),EV(),EV()],
 //Row 30
-[LBL('Case Support % (avg)'),EV(),LBL(''),VAL((s&&s.caseSupportPct!==undefined)?s.caseSupportPct+'%':'—'),EV(),EV()],
+[LBL(cubeLabel()),EV(),LBL(''),VAL(D.ulPalCube||''),EV(),EV()],
 //Row 31
-[LBL('Case Support % (min)'),EV(),LBL(''),VAL((s&&s.minCaseSupport!==undefined)?s.minCaseSupport+'%':'—'),EV(),EV()],
-//Row 32
-[LBL('Stability %'),EV(),LBL(''),VAL(D.stability||''),EV(),EV()],
-//Row 33
 [LBL('Slip Sheets'),EV(),LBL(''),VAL(D.slipSheets||'NO'),EV(),EV()],
-//Row 34 — TRUCK LEVEL
+//Row 32 — TRUCK LEVEL
 [SEC('TRUCK LEVEL'),ES(),ES(),ES(),EV(),EV()],
-//Row 35
+//Row 33
 [LBL('Truck Type'),EV(),LBL(''),VAL(D.truckType||''),EV(),EV()],
-//Row 36
+//Row 34
 [LBL('Pallets per Truck'),EV(),LBL(''),VAL(D.palletsPerTruck||''),EV(),EV()],
-//Row 37
+//Row 35
 [LBL('Stacking'),EV(),LBL(''),VAL(trkLastResult.palRows>0?TRK.stacks===1?'Single':TRK.stacks===2?'Double':'Triple':'—'),EV(),EV()],
-//Row 38
+//Row 36
 [LBL('Total Weight of Pallets'),EV(),LBL(''),VAL(D.totalWeightPallets||''),EV(),EV()],
-//Row 39
+//Row 37
 [E(),E(),E(),E(),E(),E()],
-//Row 40-43
-[E(),E(),E(),E(),E(),E()],
-[E(),E(),E(),E(),E(),E()],
+//Row 38-41
 [E(),E(),E(),E(),E(),E()],
 [E(),E(),E(),E(),E(),E()],
-//Row 44
+[E(),E(),E(),E(),E(),E()],
+[E(),E(),E(),E(),E(),E()],
+//Row 42
 [E(),E(),E(),E(),E(),{v:'CONFIDENTIAL',t:'s',s:{font:font(8,0,'FF555555'),alignment:al('right','center')}}],
   ];
 
@@ -4741,7 +4815,7 @@ function _doExcelJS(D, img3d, imgLayA, imgLayB){
     rh(28),rh(14),rh(6),rh(20),rh(16),rh(14),rh(14),rh(14),rh(14),rh(14),
     rh(14),rh(14),rh(14),rh(18),rh(20),rh(20),rh(16),rh(16),rh(20),rh(16),
     rh(16),rh(16),rh(16),rh(16),rh(16),rh(16),rh(16),rh(16),rh(16),rh(16),
-    rh(16),rh(16),rh(16),rh(20),rh(16),rh(16),rh(16),rh(16),rh(8),rh(16),
+    rh(20),rh(16),rh(16),rh(16),rh(16),rh(8),rh(16),
     rh(16),rh(16),rh(16),rh(16),
   ];
 
@@ -4761,8 +4835,8 @@ function _doExcelJS(D, img3d, imgLayA, imgLayB){
     M(15,0,15,3), M(15,4,15,6), // row16: case level + layer A header
     M(18,0,18,3),             // row19: pallet level
     M(26,4,26,6),             // row27: layer B header (col E-F)
-    M(33,0,33,3),             // row34: truck level
-    M(43,4,43,6),             // row44: confidential
+    M(31,0,31,3),             // row32: truck level
+    M(41,4,41,6),             // row42: confidential
   ];
 
   // ── Add image cells as cell comments / notes containing the image
@@ -4807,7 +4881,7 @@ function renderAll(){
       const p=ST.patterns[ST.selPat];
       if(p){
         const alt=p&&p.placementsB?' [ALT]':'';
-        sn.textContent=`${p.name}${alt}  TI:${p.TI||p.count}  Stab:${p.stability}%  Util:${p.cubicEff}%`;
+        sn.textContent=`${p.name}${alt}  TI:${p.TI||p.count}  Util:${p.cubicEff}%`;
       }
     } else { sn.textContent=''; }
   }
@@ -4969,8 +5043,8 @@ function renderStats(){
   //   H = case stack height + pallet deck height (full unit load height)
   const palLong = Math.max(pal.l, pal.w);
   const palShort = Math.min(pal.l, pal.w);
-  const ulPalL2 = Math.max(rawLoadL, palLong);
-  const ulPalW2 = Math.max(rawLoadW, palShort);
+  const ulPalL2 = Math.max(Math.max(rawLoadL, rawLoadW), palLong);
+  const ulPalW2 = Math.max(Math.min(rawLoadL, rawLoadW), palShort);
   const rawTotalH = pal.h + rawLoadH + getSlipSheetH();
   const palLoadDimStr = `${cvd(ulPalL2).toFixed(3)} × ${cvd(ulPalW2).toFixed(3)} × ${cvd(rawTotalH).toFixed(3)} ${u()} (L×W×H)`;
 
@@ -5030,9 +5104,7 @@ function renderStats(){
       const hiForCubic = typeof HI==='number' ? HI : (s.HI||s.layers||1);
       return r2(cubicEfficiency(pls3, pal.w, pal.l, cH3, hiForCubic, pal.h))+'%';
     })()) +
-    row('Case Support % (Avg)', s.caseSupportPct!==undefined ? s.caseSupportPct+'%' : '—') +
-    row('Case Support % (Min)', s.minCaseSupport!==undefined ? s.minCaseSupport+'%' : '—') +
-    row('Stability %', s.stability!==undefined ? s.stability+'%' : '—') +
+    row(cubeLabel(), cubeNum(ulPalCubeIn3(rawLoadL, rawLoadW, rawLoadH))) +
     row('Slip Sheets', (()=>{
         if(!ST.slipSheets) return 'NO';
         const ssThickIn = (KBM_SETTINGS && KBM_SETTINGS.ssThick) ? KBM_SETTINGS.ssThick : 0.04;
@@ -5065,8 +5137,8 @@ function renderTable(){
   wrap.style.display='block';
 
   document.getElementById('tHd').innerHTML=
-    ['#','Pattern','TI','HI','Total','Cubic Eff%','Case Sup%','Stability%','OH-W','OH-L']
-    .map(h=>`<th>${h}</th>`).join('');
+    ['#','Pattern','TI','HI','Total','Cubic Eff%',`UL + Pallet Cube (${cubeU()})`,'OH-W','OH-L']
+    .map((h,i)=>`<th style="width:${['4%','31%','9%','6%','8%','10%','14%','9%','9%'][i]}" title="${h.startsWith('UL')?cubeLabel()+': the outer box of the loaded pallet, pallet deck included':''}">${h}</th>`).join('');
 
   // Helper: compute display values for any pattern, from its _patEdits if edited
   // or from the original pattern object if untouched.
@@ -5082,22 +5154,16 @@ function renderTable(){
 
     // Compute all metrics from a set of placements using the current formulas
     const computeMetrics = (plsA, plsB2) => {
-      if(!plsA||!plsA.length) return {TI:origTI,TI_B:origTI_B,HI,cubicEff:0,caseSupportPct:100,stability:0,ovW:p.ohW||0,ovL:p.ohL||0};
+      if(!plsA||!plsA.length) return {TI:origTI,TI_B:origTI_B,HI,cubicEff:0,cube:0,ovW:p.ohW||0,ovL:p.ohL||0};
       const TI2 = plsA.length;
       const TI_B2 = plsB2 ? plsB2.length : TI2;
       const mxX=Math.max(...plsA.map(q=>q.x+q.w)),mnX=Math.min(...plsA.map(q=>q.x));
       const mxY=Math.max(...plsA.map(q=>q.y+q.l)),mnY=Math.min(...plsA.map(q=>q.y));
       const _oxW2=r2(((mxX-mnX)-pal.w)/2), _oxL2=r2(((mxY-mnY)-pal.l)/2);const ovW2=(pal.w<=pal.l)?_oxW2:_oxL2, ovL2=(pal.w<=pal.l)?_oxL2:_oxW2;
-      const eo=(ST.maxOverhang===''||ST.maxOverhang===null)?0:Math.abs(parseFloat(ST.maxOverhang)||0);
-      const eoin=ST.isMetric?eo/25.4:eo;
-const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
-      const suppPct = _suppV.avg;
-      const minSuppV = _suppV.min;
-      const cenPct  = weightDistScore(plsA, pal.w, pal.l);
-      const hasInterlock2 = !!(hasB && plsB2 && plsB2.length);
-      const stab2 = newStability(hasInterlock2 ? interlockQuality(plsA, plsB2) : 0, suppPct, cenPct, ovW2, ovL2, _gapFracOf(plsA));
       const cubicEff2 = r2(plsA.reduce((s,q)=>s+q.w*q.l,0)/(pal.w*pal.l)*100);
-      return {TI:TI2,TI_B:TI_B2,HI,cubicEff:cubicEff2,caseSupportPct:suppPct,minCaseSupport:minSuppV,stability:stab2,ovW:ovW2,ovL:ovL2};
+      const cH2 = valid2.length ? cv(valid2[0].h) : 0;
+      const cube2 = ulPalCubeFromPls(plsA, cH2*HI);
+      return {TI:TI2,TI_B:TI_B2,HI,cubicEff:cubicEff2,cube:cube2,ovW:ovW2,ovL:ovL2};
     };
 
     if(stored && stored.A && stored.A.length){
@@ -5114,14 +5180,13 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
 
     // Selected row always reads from ST.stats (live, kept current by leUpdateStats)
     // Unselected rows compute from _patEdits if edited, else from original p.*
-    let liveTI, liveTI_B, liveHI, liveUtil, liveStab, liveIlock, liveOhW, liveOhL;
+    let liveTI, liveTI_B, liveHI, liveUtil, liveCube, liveOhW, liveOhL;
     if(isSelected && s){
       liveTI     = s.TI;
       liveTI_B   = s.TI_B || s.TI;
       liveHI     = s.HI   || s.layers || 1;
       liveUtil   = s.cubicEff;
-      liveStab   = s.stability;
-      liveIlock  = s.caseSupportPct !== undefined ? s.caseSupportPct : (s.interlockPct||0);
+      liveCube   = currentUlPalCube();
       liveOhW    = s.ovW;
       liveOhL    = s.ovL;
     } else {
@@ -5130,8 +5195,7 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
       liveTI_B  = v.TI_B;
       liveHI    = v.HI;
       liveUtil  = v.cubicEff;
-      liveStab  = v.stability;
-      liveIlock = v.caseSupportPct !== undefined ? v.caseSupportPct : (v.interlockPct||0);
+      liveCube  = v.cube;
       liveOhW   = v.ovW;
       liveOhL   = v.ovL;
     }
@@ -5150,8 +5214,6 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
     const totalCases = isMC ? '—' : calcTotalCases(liveTI, liveHI, liveTI_B);
 
     const ec     = liveUtil>90?'var(--gn)':liveUtil>75?'#FFB74D':'var(--rd)';
-    const sc2    = liveStab>85?'var(--gn)':liveStab>70?'#FFB74D':'var(--rd)';
-    const ic     = liveIlock>60?'var(--gn)':liveIlock>30?'#FFB74D':'var(--dm)';
     const ohWcol = liveOhW>0.05?'var(--rd)':liveOhW<-0.05?'#4FC3F7':'var(--gn)';
     const ohLcol = liveOhL>0.05?'var(--rd)':liveOhL<-0.05?'#4FC3F7':'var(--gn)';
     const ohWstr = (liveOhW>0?'+':'')+dp(liveOhW)+u();
@@ -5184,8 +5246,7 @@ const _suppV = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB2);
       <td>${hiDisplay}</td>
       <td style="font-weight:bold;color:#ddd" id="patTC_${i}">${totalCases}</td>
       <td style="color:${ec};font-weight:bold">${liveUtil}%</td>
-      <td style="color:${sc2}">${liveStab}%</td>
-      <td style="color:${ic}">${liveIlock}%</td>
+      <td style="color:#ddd">${liveCube>0?cubeNum(liveCube):'—'}</td>
       <td style="color:${ohWcol}">${ohWstr}</td>
       <td style="color:${ohLcol}">${ohLstr}</td>
     </tr>`;
@@ -5260,14 +5321,8 @@ function _syncStatsFromPattern(i){
   const ulLong2 = Math.max(unitLoadW, unitLoadL);
   const ulShort2 = Math.min(unitLoadW, unitLoadL);
   const _oxW6=r2((unitLoadW-pal.w)/2), _oxL6=r2((unitLoadL-pal.l)/2);const ovW = (pal.w<=pal.l)?_oxW6:_oxL6, ovL = (pal.w<=pal.l)?_oxL6:_oxW6;
-  const eo  = (ST.maxOverhang===''||ST.maxOverhang===null)?0:Math.abs(parseFloat(ST.maxOverhang)||0);
-  const eoin = ST.isMetric ? eo/25.4 : eo;
-  const _supp = caseSupportPct(plsA, pal.w, pal.l, eoin, HI, plsB);
-  const suppPct = _supp.avg;
-  const minSupp = _supp.min;
   const cenPct  = weightDistScore(plsA, pal.w, pal.l);
   const hasInterlock = hasB && !!plsB;
-  const stab  = newStability(hasInterlock ? interlockQuality(plsA, plsB) : 0, suppPct, cenPct, ovW, ovL, _gapFracOf(plsA));
   const palArea = pal.w * pal.l;
   const cubicEff = r2(plsA.reduce((s,q)=>s+q.w*q.l,0)/palArea*100);
   const totalH   = r2(pal.h + cH * HI + getSlipSheetH());
@@ -5281,8 +5336,6 @@ function _syncStatsFromPattern(i){
     TI, TI_B, perLayer:TI, caseCount:calcTotalCases(TI,HI,TI_B), totalCases:calcTotalCases(TI,HI,TI_B),
     ovW, ovL,
     cubicEff, palUtilPct:cubicEff,
-    caseSupportPct:suppPct, minCaseSupport:minSupp,
-    stability:stab,
     interlockPct: hasInterlock ? r2(overlapRatio(plsA,plsB||plsA)*100) : 0,
     totalH:dp(totalH),
     unitLoadW_in:ulShort2, unitLoadL_in:ulLong2, caseStackH_in:caseStackH,
@@ -5788,12 +5841,16 @@ function trkGenerate(){
   const topRowH = Math.max(tvH, evH);
   const TOTAL_H = PAD + LABEL_H + topRowH + DIM_H + PAD;
 
-  can.width  = CANVAS_W;
-  can.height = Math.ceil(TOTAL_H);
-  can.style.height = can.height + 'px';
+  // Hi-DPI backing store (2–3× the on-screen size) so the view stays sharp
+  const CANVAS_H = Math.ceil(TOTAL_H);
+  const _dpr = _canvasDPR();
+  can.width  = Math.round(CANVAS_W*_dpr);
+  can.height = Math.round(CANVAS_H*_dpr);
+  can.style.height = CANVAS_H + 'px';
 
   const ctx = can.getContext('2d');
-  ctx.clearRect(0, 0, CANVAS_W, can.height);
+  ctx.setTransform(_dpr,0,0,_dpr,0,0);
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
   // ── COLOURS
   const C_BG       = '#0b1220';
@@ -5811,21 +5868,23 @@ function trkGenerate(){
   const C_MARGIN   = 'rgba(80,200,120,0.18)';   // margin fill
   const C_WARN     = '#e67e22';
 
-  ctx.fillStyle = C_BG;
-  ctx.fillRect(0, 0, CANVAS_W, can.height);
+  const _bg=ctx.createLinearGradient(0,0,0,CANVAS_H);
+  _bg.addColorStop(0,'#101a2c'); _bg.addColorStop(1,C_BG);
+  ctx.fillStyle = _bg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
   // ── DRAW HELPERS ─────────────────────────────────────────────────
 
   const drawTitle = (text, x, y, w, badge) => {
     ctx.fillStyle = C_TITLE_BG;
-    ctx.fillRect(x, y, w, LABEL_H);
+    _rrPath(ctx, x, y, w, LABEL_H, 4); ctx.fill();
     ctx.fillStyle = C_DIM;
-    ctx.font = 'bold 11px "Share Tech Mono",monospace';
+    ctx.font = 'bold 12px "Share Tech Mono",monospace';
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(text, x+8, y+LABEL_H/2);
     if(badge){
       ctx.fillStyle = balanced ? '#2ecc71' : C_WARN;
-      ctx.font = 'bold 9px "Share Tech Mono",monospace';
+      ctx.font = 'bold 10.5px "Share Tech Mono",monospace';
       ctx.textAlign = 'right';
       ctx.fillText(badge, x+w-6, y+LABEL_H/2);
     }
@@ -5872,12 +5931,12 @@ function trkGenerate(){
       ctx.lineTo(ax-6*Math.cos(ang+.4),ay-6*Math.sin(ang+.4));
       ctx.closePath(); ctx.fill();
     });
-    ctx.font='bold 9px "Share Tech Mono",monospace';
+    ctx.font='bold 10.5px "Share Tech Mono",monospace';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     const mx=(x1+x2)/2, my=(y1+y2)/2;
     const tw=ctx.measureText(label).width;
-    ctx.fillStyle='rgba(10,16,36,.85)';
-    ctx.fillRect(mx-tw/2-3,my-6,tw+6,12);
+    ctx.fillStyle='rgba(10,16,36,.92)';
+    _rrPath(ctx,mx-tw/2-4,my-7,tw+8,14,3); ctx.fill();
     ctx.fillStyle=C_LABEL;
     ctx.fillText(label,mx,my);
   };
@@ -5888,6 +5947,14 @@ function trkGenerate(){
     ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=0.7;
     ctx.strokeRect(px,py,pw,ph);
   };
+
+  // Layer A of the selected pattern, so each pallet shows the real layout
+  const palDims = PALLETS[ST.palletKey];
+  const _trkPat = (!ST.multiMode && ST.patterns && ST.patterns.length) ? ST.patterns[ST.selPat] : null;
+  const _trkLayer = (_trkPat && !_trkPat.multiCaseManual)
+    ? ((ST.layerEdits && ST.layerEdits['0']) ? ST.layerEdits['0'] : (_trkPat.placements||[]))
+    : null;
+  const _trkColor = (ST.cases[0] && ST.cases[0].color) || C_CASE_A;
 
   // ════════════════════════════════════════════════════
   // VIEW 1 — TOP VIEW  (floor plan: L × W)
@@ -5946,35 +6013,38 @@ function trkGenerate(){
       ctx.strokeStyle='#5a3e0a'; ctx.lineWidth=1.5;
       ctx.strokeRect(px+0.5,py+0.5,pw-1,ph-1);
 
-      // ── Unit load: solid blue block centred on pallet with 12% inset margin ──
-      const INSET=0.12;  // 12% margin each side so pallet edge is visible
-      const ux=px+pw*INSET, uy=py+ph*INSET;
-      const uw=pw*(1-2*INSET), uh=ph*(1-2*INSET);
-      ctx.fillStyle=C_CASE_A;          // consistent blue
-      ctx.fillRect(ux,uy,uw,uh);
-      // Subtle grid lines on the unit load (suggests individual cases without clutter)
-      ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=0.5;
-      // Vertical lines
-      const gridCols=Math.max(2,Math.round(pw/12));
-      for(let g=1;g<gridCols;g++){
-        const gx=ux+uw*g/gridCols;
-        ctx.beginPath();ctx.moveTo(gx,uy);ctx.lineTo(gx,uy+uh);ctx.stroke();
+      // ── Unit load: the real Layer A pattern, drawn case-for-case ──
+      if(_trkLayer && _trkLayer.length){
+        // Pallet axis that runs along the trailer length
+        const alongIsW = !!palRotated_last;
+        const palAlong = alongIsW ? palDims.w : palDims.l;
+        const palAcross = alongIsW ? palDims.l : palDims.w;
+        const s2 = scaleTop;
+        const offX = px + (pw - palAlong*s2)/2;
+        const offY = py + (ph - palAcross*s2)/2;
+        _trkLayer.forEach(q=>{
+          const qx = alongIsW ? q.x : q.y, qy = alongIsW ? q.y : q.x;
+          const qw = alongIsW ? q.w : q.l, qh = alongIsW ? q.l : q.w;
+          const cx2=offX+qx*s2, cy2=offY+qy*s2, cw2=Math.max(qw*s2-0.6,1), ch2=Math.max(qh*s2-0.6,1);
+          _drawCaseBlock(ctx,cx2,cy2,cw2,ch2,getPlacementColor(q,true),{shadow:false,radius:1,edge:0.6});
+        });
+      } else {
+        // No single pattern (manual multi-case build): neutral load block
+        const INSET=0.12;
+        const ux=px+pw*INSET, uy=py+ph*INSET;
+        const uw=pw*(1-2*INSET), uh=ph*(1-2*INSET);
+        _drawCaseBlock(ctx,ux,uy,uw,uh,C_CASE_A,{shadow:false,radius:2});
       }
-      // Horizontal lines
-      const gridRows=Math.max(2,Math.round(ph/12));
-      for(let g=1;g<gridRows;g++){
-        const gy=uy+uh*g/gridRows;
-        ctx.beginPath();ctx.moveTo(ux,gy);ctx.lineTo(ux+uw,gy);ctx.stroke();
-      }
-      // Unit load border
-      ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=0.8;
-      ctx.strokeRect(ux,uy,uw,uh);
 
       // Pallet number
       const palNum = row*palCols+col+1;
-      ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font=`bold ${Math.max(6,Math.min(9,pw/6))}px sans-serif`;
+      const nf=Math.max(7,Math.min(11,pw/7));
+      ctx.font=`700 ${nf}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(palNum, px+pw/2, py+ph-6);
+      const ntw=ctx.measureText(String(palNum)).width;
+      ctx.fillStyle='rgba(8,14,28,.72)'; _rrPath(ctx,px+pw/2-ntw/2-3,py+ph/2-nf/2-2,ntw+6,nf+4,3); ctx.fill();
+      ctx.fillStyle='#ffffff';
+      ctx.fillText(palNum, px+pw/2, py+ph/2+0.5);
     }
   }
 
@@ -6022,11 +6092,14 @@ function trkGenerate(){
       const ew=palFloorW*scaleEnd;
       // Pallet deck
       drawPalRect(ex+0.5,ey+0.5+(caseH*ST.layers*scaleEnd),Math.max(ew-1,1),Math.max(pH*scaleEnd,2),tier);
-      // Case block
-      ctx.fillStyle=C_CASE_A;
-      ctx.fillRect(ex+0.5,ey+0.5,Math.max(ew-1,1),Math.max(caseH*ST.layers*scaleEnd-1,2));
-      ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=0.4;
-      ctx.strokeRect(ex+0.5,ey+0.5,Math.max(ew-1,1),Math.max(caseH*ST.layers*scaleEnd-1,2));
+      // Case block, with a line at every layer
+      const _bh=Math.max(caseH*ST.layers*scaleEnd-1,2), _bw=Math.max(ew-1,1);
+      _drawCaseBlock(ctx,ex+0.5,ey+0.5,_bw,_bh,_trkColor,{shadow:false,radius:1.5,edge:0.8});
+      if(caseH*scaleEnd>=3){
+        ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=0.7; ctx.beginPath();
+        for(let k=1;k<ST.layers;k++){ const ly=ey+0.5+k*caseH*scaleEnd; ctx.moveTo(ex+1,ly); ctx.lineTo(ex+_bw,ly); }
+        ctx.stroke();
+      }
     }
   }
   ctx.strokeStyle=C_WALL;ctx.lineWidth=2;ctx.strokeRect(evX,evCY,evTW,evTH);
@@ -6908,7 +6981,7 @@ function _bsGuideHTML(){
     +step(1,'Enter your case size','Width, length, height (and weight if known). Units follow Settings — switch with Tools → Toggle Units.')
     +step(2,'Pick the pallet','Choose a standard pallet (e.g. Full 48×40") or a custom size, and set your max stack height.')
     +step(3,'Generate patterns','The engine builds and ranks every viable layout — column stacks first, then interlocked and mixed.')
-    +step(4,'Choose a pattern','Click any pattern to preview it and watch the case count, cube efficiency, and stability update.')
+    +step(4,'Choose a pattern','Click any pattern to preview it and watch the case count, cubic efficiency, and unit load + pallet cube update.')
     +step(5,'Save or report','Save the project to your account, or open the Report view to export a branded PDF.')
     +tip('Set your <b style="color:#fff;">default pallet, units, and trailer</b> once in Settings — every new project starts there.')
     +sec('02','CREATING PATTERNS')
@@ -7382,9 +7455,7 @@ function rbStatsPalletLevel(D, s){
     ${rbRow('Total Cases', D.totalCases, true)}
     ${rbRow('Pallet Weight', D.totalPalletWeight)}
     ${rbRow('Cubic Efficiency', D.cubeEff, true)}
-    ${rbRow('Case Support (avg)', s&&s.caseSupportPct!==undefined?s.caseSupportPct+'%':'—', true)}
-    ${rbRow('Case Support (min)', s&&s.minCaseSupport!==undefined?s.minCaseSupport+'%':'—')}
-    ${rbRow('Stability %', D.stability, true)}
+    ${rbRow(cubeLabel(), D.ulPalCube, true)}
     ${rbRow('Slip Sheets', D.slipSheets)}
   </div>`;
 }
@@ -8132,7 +8203,7 @@ function rbPdfStats(doc, block, bx, by, bw, bh, sx, sy){
   const rowH=3.5, headerH=4;
   let rows=[];
   if(block.type==='statsCaseLevel'){ rows=[['Case Dimensions',D.caseDims],['Case Weight',D.caseWeight]]; }
-  else if(block.type==='statsPalletLevel'){ rows=[['Pattern',D.patName],['Unit Load Dims',D.unitLoadDims],['Unit Load+Pallet',D.palletDims],['OH Length',D.ovL],['OH Width',D.ovW],['TI',D.TI],['HI',D.HI],['Total Cases',D.totalCases],['Pallet Weight',D.totalPalletWeight],['Cubic Eff%',D.cubeEff],['Support (avg)',s&&s.caseSupportPct!==undefined?s.caseSupportPct+'%':'—'],['Support (min)',s&&s.minCaseSupport!==undefined?s.minCaseSupport+'%':'—'],['Stability%',D.stability],['Slip Sheets',D.slipSheets]]; }
+  else if(block.type==='statsPalletLevel'){ rows=[['Pattern',D.patName],['Unit Load Dims',D.unitLoadDims],['Unit Load+Pallet',D.palletDims],['OH Length',D.ovL],['OH Width',D.ovW],['TI',D.TI],['HI',D.HI],['Total Cases',D.totalCases],['Pallet Weight',D.totalPalletWeight],['Cubic Eff%',D.cubeEff],[`UL+Pallet Cube (${cubeU()})`,(D.ulPalCube||'—').replace(/ (ft³|m³)$/,'')],['Slip Sheets',D.slipSheets]]; }
   else if(block.type==='statsTruckLevel'){ rows=[['Truck Type',D.truckType],['Pallets/Truck',D.palletsPerTruck],['Total Weight',D.totalWeightPallets]]; }
   else if(block.type==='statsCompact'){ rows=[['TI',D.TI],['HI',D.HI],['Total',D.totalCases],['Cubic Eff',D.cubeEff]]; }
   // Header bar
@@ -8252,7 +8323,7 @@ function _fitBox(nw, nh, maxW, maxH){
     const c3 = document.getElementById('c3d');
     const ct = document.getElementById('ctrk2d');
     const cr = document.getElementById('crpt');
-    if(c2){ c2.width = cw; c2.height = newCaH; typeof draw2D === 'function' && draw2D(); }
+    if(c2){ c2._lw = cw; c2._lh = newCaH; typeof draw2D === 'function' && draw2D(); }
     if(c3 && window.THR && THR.renderer){
       THR.renderer.setSize(cw, newCaH, false);
       if(THR.camera){ THR.camera.aspect = cw / newCaH; THR.camera.updateProjectionMatrix(); }
@@ -8862,7 +8933,7 @@ const TOUR_STEPS = [
   { id:'table', section:'PATTERNS', kind:'click', side:'top', target:'#tw', needs:'patterns',
     before:()=>{ TOUR.flags.rowClicked = false; },
     title:'Pattern list',
-    body:'Every row is a different pattern, ranked by <b>cases per layer (TI)</b>. Compare cubic efficiency, case support and stability side by side. The highlighted row is the one shown on screen.',
+    body:'Every row is a different pattern, ranked by <b>cases per layer (TI)</b>. Compare cubic efficiency and unit load + pallet cube side by side. The highlighted row is the one shown on screen.',
     todo:'Click any row to view that pattern.',
     done:()=>TOUR.flags.rowClicked },
 

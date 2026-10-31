@@ -136,7 +136,7 @@ export default function HomePage() {
       key: "pallet",
       label: "Pallet",
       title: "See the full pallet in 3D.",
-      body: "Rotate it and check height, overhang, and stability before anyone stacks a single case.",
+      body: "Rotate it and check height and overhang before anyone stacks a single case.",
       chip: "119 cases · 51 in tall · 0 in overhang",
       img: "/story/pallet-3d.jpg",
       alt: "3D view of the finished pallet load, 48 by 40 by 51 inches",
