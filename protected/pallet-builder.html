@@ -394,7 +394,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
   <div class="card">
     <div class="st">LOAD CONSTRAINTS</div>
     <div class="dl" style="margin-bottom:2px;">EDGE OFFSET / SIDE (<span id="ohU">in</span>)</div>
-    <input type="number" id="maxOHI" step="0.125" placeholder="e.g. 1 or -0.75" oninput="ST.maxOverhang=this.value;_autoCalculate()" style="margin-bottom:2px;"/>
+    <input type="number" id="maxOHI" step="0.125" placeholder="e.g. 1 or -0.75" oninput="ST.maxOverhang=this.value;_autoCalculate(undefined,true)" style="margin-bottom:2px;"/>
     <div style="font-size:11px;color:var(--dm);margin-bottom:5px;line-height:1.4;">
       Positive = overhang allowed per side<br>
       Negative = inset (cases must stay back from edge)<br>
@@ -1255,6 +1255,73 @@ function _drawCaseBlock(ctx,x,y,w,h,col,opts){
   ctx.strokeStyle=_shadeHex(col,-0.5); ctx.lineWidth=opts.edge||1;
   _rrPath(ctx,x+0.5,y+0.5,w-1,h-1,r); ctx.stroke();
 }
+// ── Shared 2D layer graphics — used by the on-screen 2D view AND the
+// report / export images, so both always look the same.
+const _UI_FONT='system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+// Soft studio background with a faint grid (matches the 3D floor).
+function _draw2DBackdrop(ctx,W,H){
+  const bgG=ctx.createLinearGradient(0,0,0,H);
+  bgG.addColorStop(0,'#f4f6f9'); bgG.addColorStop(1,'#e6eaf0');
+  ctx.fillStyle=bgG; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(40,60,90,.06)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=0.5;gx<W;gx+=24){ctx.moveTo(gx,0);ctx.lineTo(gx,H);}
+  for(let gy=0.5;gy<H;gy+=24){ctx.moveTo(0,gy);ctx.lineTo(W,gy);}
+  ctx.stroke();
+}
+// Pallet deck: drop shadow, wood boards with dark gaps, crisp edge.
+function _draw2DPallet(ctx,ox,oy,w,h){
+  ctx.fillStyle='rgba(20,30,50,.16)'; _rrPath(ctx,ox+3,oy+5,w,h,3); ctx.fill();
+  ctx.fillStyle='#6e5020'; _rrPath(ctx,ox,oy,w,h,3); ctx.fill();
+  const nB=9, bH=h/nB, gap=Math.max(1,bH*0.12);
+  for(let i=0;i<nB;i++){
+    const by=oy+bH*i+gap/2, bh=bH-gap;
+    const wg=ctx.createLinearGradient(0,by,0,by+bh);
+    const base=i%2===0?'#d8b56c':'#cfa95c';
+    wg.addColorStop(0,_shadeHex(base,0.12)); wg.addColorStop(1,_shadeHex(base,-0.08));
+    ctx.fillStyle=wg; ctx.fillRect(ox+1,by,w-2,bh);
+  }
+  ctx.strokeStyle='#6b4f1d';ctx.lineWidth=1.5;_rrPath(ctx,ox+0.75,oy+0.75,w-1.5,h-1.5,3);ctx.stroke();
+}
+// Case size label, light or dark text for contrast. Starts at 26px (2× the
+// old 13px) and only shrinks when the case is too small for the text: it must
+// fit within ~84% of the case width and ~42% of its height. Below 8px it is
+// skipped rather than drawn unreadably.
+function _draw2DCaseLabel(ctx,x,y,w,h,col,text,maxPx){
+  if(!(w>14&&h>10)) return;
+  const MAX=maxPx||26, MIN=8;
+  ctx.font=`700 100px ${_UI_FONT}`;
+  const per100=ctx.measureText(text).width||1;           // text width at 100px
+  const fs=Math.floor(Math.min(MAX, (w*0.84)/per100*100, h*0.42));
+  if(fs<MIN) return;
+  ctx.font=`700 ${fs}px ${_UI_FONT}`;
+  ctx.fillStyle=_isLightHex(col)?'rgba(10,20,35,.78)':'rgba(255,255,255,.94)';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,x+w/2,y+h/2+0.5);
+}
+const _caseSizeLabel=p=>ST.multiMode?p.label:(ST.isMetric?`${r2(p.w*25.4)}×${r2(p.l*25.4)}`:`${r2(p.w)}×${r2(p.l)}`);
+// Dimension arrow with a label pill (same look as the on-screen 2D view).
+function _draw2DDimArrow(ctx,x1,y1,x2,y2,lbl,fontPx,noPill){
+  const fp=fontPx||13, head=fp*0.85;
+  ctx.strokeStyle='#223355';ctx.fillStyle='#223355';ctx.lineWidth=Math.max(2,fp/6.5);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const a=Math.atan2(y2-y1,x2-x1);
+  [[x1,y1,a+Math.PI],[x2,y2,a]].forEach(([ax,ay,ang])=>{
+    ctx.beginPath();ctx.moveTo(ax,ay);
+    ctx.lineTo(ax-head*Math.cos(ang-.38),ay-head*Math.sin(ang-.38));
+    ctx.lineTo(ax-head*Math.cos(ang+.38),ay-head*Math.sin(ang+.38));
+    ctx.closePath();ctx.fill();
+  });
+  ctx.font=`600 ${fp}px ${_UI_FONT}`;
+  const tw=ctx.measureText(lbl).width;
+  const lx=(x1+x2)/2, ly=Math.min(y1,y2)-(noPill?fp*0.3:fp*0.62);
+  if(!noPill){
+    ctx.fillStyle='rgba(255,255,255,.92)';
+    _rrPath(ctx,lx-tw/2-fp*0.4,ly-fp,tw+fp*0.8,fp*1.4,fp*0.3); ctx.fill();
+  }
+  ctx.fillStyle='#223355';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  ctx.fillText(lbl,lx,ly);
+}
 
 function draw2D(){
   // During drag: throttle to rAF for smooth 60fps
@@ -1279,15 +1346,7 @@ function _draw2DImmediate(){
   const pal=PALLETS[ST.palletKey],pW=pal.w,pL=pal.l;
   const PAD=64,cw2=CW-PAD*2,ch2=CH-PAD*2;
   ctx.clearRect(0,0,CW,CH);
-  // Soft studio background with a faint grid, matching the 3D view
-  const bgG=ctx.createLinearGradient(0,0,0,CH);
-  bgG.addColorStop(0,'#f4f6f9'); bgG.addColorStop(1,'#e6eaf0');
-  ctx.fillStyle=bgG; ctx.fillRect(0,0,CW,CH);
-  ctx.strokeStyle='rgba(40,60,90,.06)'; ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let gx=0.5;gx<CW;gx+=24){ctx.moveTo(gx,0);ctx.lineTo(gx,CH);}
-  for(let gy=0.5;gy<CH;gy+=24){ctx.moveTo(0,gy);ctx.lineTo(CW,gy);}
-  ctx.stroke();
+  _draw2DBackdrop(ctx,CW,CH);
   const baseSc=Math.min(cw2/pW,ch2/pL);
   const sc=baseSc*_2dZoom;
   const ox=PAD+(cw2-pW*sc)/2,oy=PAD+(ch2-pL*sc)/2;
@@ -1295,17 +1354,7 @@ function _draw2DImmediate(){
   LE.sc=sc; LE.ox=ox; LE.oy=oy;
 
   // pallet: soft drop shadow, then deck boards with dark gaps between them
-  ctx.fillStyle='rgba(20,30,50,.16)'; _rrPath(ctx,ox+3,oy+5,pW*sc,pL*sc,3); ctx.fill();
-  ctx.fillStyle='#6e5020'; _rrPath(ctx,ox,oy,pW*sc,pL*sc,3); ctx.fill();
-  const nB=9, bH=pL*sc/nB, gap=Math.max(1,bH*0.12);
-  for(let i=0;i<nB;i++){
-    const by=oy+bH*i+gap/2, bh=bH-gap;
-    const wg=ctx.createLinearGradient(0,by,0,by+bh);
-    const base=i%2===0?'#d8b56c':'#cfa95c';
-    wg.addColorStop(0,_shadeHex(base,0.12)); wg.addColorStop(1,_shadeHex(base,-0.08));
-    ctx.fillStyle=wg; ctx.fillRect(ox+1,by,pW*sc-2,bh);
-  }
-  ctx.strokeStyle='#6b4f1d';ctx.lineWidth=1.5;_rrPath(ctx,ox+0.75,oy+0.75,pW*sc-1.5,pL*sc-1.5,3);ctx.stroke();
+  _draw2DPallet(ctx,ox,oy,pW*sc,pL*sc);
 
   // Determine which placements to show — always use numeric layer index
   const pat = !ST.multiMode && ST.patterns.length>0 ? ST.patterns[ST.selPat] : null;
@@ -1342,13 +1391,7 @@ function _draw2DImmediate(){
       ctx.strokeStyle='#FFD700';ctx.lineWidth=2.5;_rrPath(ctx,x-1,y-1,w+2,h+2,3);ctx.stroke();
     }
     // Label — sized to the case, light or dark text for contrast
-    if(w>22&&h>13){
-      const fs=Math.max(8,Math.min(13,w/5.5,h/2.6));
-      ctx.font=`600 ${fs}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
-      ctx.fillStyle=_isLightHex(col)?'rgba(10,20,35,.78)':'rgba(255,255,255,.94)';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(ST.multiMode?p.label:(ST.isMetric?`${r2(p.w*25.4)}×${r2(p.l*25.4)}`:`${r2(p.w)}×${r2(p.l)}`),x+w/2,y+h/2+0.5);
-    }
+    _draw2DCaseLabel(ctx,x,y,w,h,col,_caseSizeLabel(p));
   }
 
   // ── Adjacent layer ghost: show previous layer at 50% opacity as reference ──
@@ -4051,128 +4094,76 @@ function renderTruckForExport(w,h){
 
 // Render Layer A or B from 2D at a fixed large canvas size
 // Temporarily forces that layer to be displayed and captures it
-function capture2DLayer(layer){
+function capture2DLayer(layer, boxAspect){
   const pat=(!ST.multiMode&&ST.patterns.length>0)?ST.patterns[ST.selPat]:null;
   if(!pat||!ST.stats) return null;
 
   const pal  = PALLETS[ST.palletKey];
   const pW   = pal.w, pL = pal.l;
 
-  // Render at the pallet's natural aspect ratio — no distortion
-  const MARGIN = 70; // px padding — larger to fit bigger dimension labels
-  const TARGET_LONG = 900;
-  const aspect = pL / pW; // height/width of pallet
+  // Laid out at on-screen proportions (so fonts, edges and shadows match the
+  // 2D view exactly), then rendered at 3× for sharp printing. The image keeps
+  // the same overall shape and white background as before, so every report
+  // layout is unchanged — only the pallet / case graphics are new.
+  const MARGIN = 48;           // room for the dimension arrows (same ratio as before)
+  const TARGET_LONG = 620;     // longest pallet side, in layout px
+  const RES = 3;               // output resolution multiplier
+  const aspect = pL / pW;      // height/width of pallet
   let canvW, canvH;
-  if(aspect >= 1){
-    canvH = TARGET_LONG;
-    canvW = Math.round(TARGET_LONG / aspect);
-  } else {
-    canvW = TARGET_LONG;
-    canvH = Math.round(TARGET_LONG * aspect);
-  }
+  if(aspect >= 1){ canvH = TARGET_LONG; canvW = Math.round(TARGET_LONG / aspect); }
+  else           { canvW = TARGET_LONG; canvH = Math.round(TARGET_LONG * aspect); }
   canvW += MARGIN * 2;
   canvH += MARGIN * 2;
+  // Match the shape of the report box the image is placed in, if given
+  if(boxAspect > 0){
+    if(canvW / canvH < boxAspect) canvW = Math.round(canvH * boxAspect);
+    else canvH = Math.round(canvW / boxAspect);
+  }
 
-  // Draw onto a clean offscreen canvas
   const off = document.createElement('canvas');
-  off.width  = canvW;
-  off.height = canvH;
+  off.width  = canvW * RES;
+  off.height = canvH * RES;
   const ctx  = off.getContext('2d');
+  ctx.setTransform(RES,0,0,RES,0,0);
+  ctx.imageSmoothingQuality = 'high';
 
-  // White background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvW, canvH);
 
-  // Scale so pallet fits with margin
-  const sc   = Math.min((canvW - MARGIN*2) / pW, (canvH - MARGIN*2) / pL);
-  const ox   = MARGIN + (canvW - MARGIN*2 - pW*sc) / 2;
-  const oy   = MARGIN + (canvH - MARGIN*2 - pL*sc) / 2;
+  const sc = Math.min((canvW - MARGIN*2) / pW, (canvH - MARGIN*2) / pL);
+  const ox = MARGIN + (canvW - MARGIN*2 - pW*sc) / 2;
+  const oy = MARGIN + (canvH - MARGIN*2 - pL*sc) / 2;
 
-  // Pallet deck
-  ctx.fillStyle   = '#D4A55A';
-  ctx.fillRect(ox, oy, pW*sc, pL*sc);
-  ctx.strokeStyle = '#A0732A';
-  ctx.lineWidth   = 1.5;
-  ctx.strokeRect(ox, oy, pW*sc, pL*sc);
+  _draw2DPallet(ctx, ox, oy, pW*sc, pL*sc);
 
   // Get placements for the requested layer — use numeric keys (0=LayerA, 1=LayerB)
   const layerIdx = (layer === 'B' || layer === '1') ? 1 : 0;
   const pls = (() => {
-    // Check numeric key first (current storage format)
     if(ST.layerEdits && ST.layerEdits[String(layerIdx)] !== undefined)
       return ST.layerEdits[String(layerIdx)];
-    // Fall back to legacy string keys
     if(ST.layerEdits && ST.layerEdits[layer] && ST.layerEdits[layer].length)
       return ST.layerEdits[layer];
-    // Fall back to pattern placements
     if(layerIdx === 1 && pat.placementsB && pat.placements !== pat.placementsB)
       return pat.placementsB;
     return pat.placements || [];
   })();
 
-  // Draw each case
   pls.forEach(p => {
     const col = getPlacementColor(p, true);
-    const px  = ox + p.x*sc;
-    const py  = oy + p.y*sc;
-    const pw  = p.w*sc - 1;
-    const ph  = p.l*sc - 1;
-
-    ctx.fillStyle   = col;
-    ctx.fillRect(px, py, pw, ph);
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth   = 0.8;
-    ctx.strokeRect(px, py, pw, ph);
-
-    // Dimension label if large enough
-    if(pw > 28 && ph > 14){
-      ctx.fillStyle    = 'rgba(255,255,255,0.85)';
-      ctx.font         = `bold ${Math.max(9, Math.min(13, pw/4))}px monospace`;
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      const lbl = (p.nomW||p.w).toFixed(0)+'×'+(p.nomL||p.l).toFixed(0);
-      ctx.fillText(lbl, px+pw/2, py+ph/2);
-    }
+    const x = ox + p.x*sc, y = oy + p.y*sc, w = p.w*sc - 1, h = p.l*sc - 1;
+    _drawCaseBlock(ctx, x, y, w, h, col);
+    // Report images print small, so labels may grow further when the case has room
+    _draw2DCaseLabel(ctx, x, y, w, h, col, _caseSizeLabel(p), 44);
   });
 
-  // Thin border on top of everything
-  ctx.strokeStyle = '#6b4a1a';
-  ctx.lineWidth   = 2;
-  ctx.strokeRect(ox, oy, pW*sc, pL*sc);
-
-  // Dimension labels — sized to match the dim bar font weight in the report
-  const dimFont = Math.round(TARGET_LONG / 28); // ~32px at 900px canvas
-  const wLabel  = `W: ${dp(pW)} ${u()}`;
-  const lLabel  = `L: ${dp(pL)} ${u()}`;
-
+  // Dimension arrows — same style and L/W naming as the on-screen 2D view
+  const dimFont = 22;   // same printed size as the original report labels
+  const hLbl = `${pW>=pL?'L':'W'}: ${ST.isMetric?r2(pW*25.4)+' mm':r2(pW)+'"'}`;
+  const vLbl = `${pW>=pL?'W':'L'}: ${ST.isMetric?r2(pL*25.4)+' mm':r2(pL)+'"'}`;
+  _draw2DDimArrow(ctx, ox, oy-12, ox+pW*sc, oy-12, hLbl, dimFont, true);
   ctx.save();
-  ctx.font        = `bold ${dimFont}px "Share Tech Mono", monospace`;
-  ctx.fillStyle   = '#1a1a1a';
-  ctx.textAlign   = 'center';
-  const tickLen   = 8;
-  const gap       = 10; // gap between pallet edge and arrow
-
-  // Width arrow — above pallet
-  const arrowY = oy - gap - dimFont * 0.5;
-  ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(ox, arrowY); ctx.lineTo(ox + pW*sc, arrowY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox, arrowY-tickLen); ctx.lineTo(ox, arrowY+tickLen); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox+pW*sc, arrowY-tickLen); ctx.lineTo(ox+pW*sc, arrowY+tickLen); ctx.stroke();
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(wLabel, ox + pW*sc/2, arrowY - 6);
-
-  // Length arrow — left of pallet
-  const arrowX = ox - gap - dimFont * 0.5;
-  ctx.beginPath(); ctx.moveTo(arrowX, oy); ctx.lineTo(arrowX, oy+pL*sc); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(arrowX-tickLen, oy);       ctx.lineTo(arrowX+tickLen, oy);       ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(arrowX-tickLen, oy+pL*sc); ctx.lineTo(arrowX+tickLen, oy+pL*sc); ctx.stroke();
-  ctx.save();
-  ctx.translate(arrowX, oy + pL*sc/2);
-  ctx.rotate(-Math.PI/2);
-  ctx.textBaseline = 'bottom';
-  ctx.textAlign    = 'center';
-  ctx.fillText(lLabel, 0, -6);
-  ctx.restore();
+  ctx.translate(ox-12, oy+pL*sc/2); ctx.rotate(-Math.PI/2);
+  _draw2DDimArrow(ctx, -pL*sc/2, 0, pL*sc/2, 0, vLbl, dimFont, true);
   ctx.restore();
 
   try{ return off.toDataURL('image/png'); }
@@ -4406,8 +4397,8 @@ function _doPDF(){
   // Three supplementary views: Front / Top / Side (using 2D layer captures)
   const subW=(PW-2*M-8)/3, subH=55;
   const views=[
-    {l:'TOP VIEW — LAYER A',  fn:()=>capture2DLayer('A'), bg:[240,248,255]},
-    {l:'TOP VIEW — LAYER B',  fn:()=>capture2DLayer('B'), bg:[255,244,240]},
+    {l:'TOP VIEW — LAYER A',  fn:()=>capture2DLayer('A',subW/subH), bg:[240,248,255]},
+    {l:'TOP VIEW — LAYER B',  fn:()=>capture2DLayer('B',subW/subH), bg:[255,244,240]},
     {l:'CASE DETAIL VIEW',    fn:()=>renderCaseForExport(Math.round(subW*4),Math.round(subH*4)), bg:[240,244,248]},
   ];
   y = secBar('Supplementary Views', y);
@@ -4496,7 +4487,8 @@ function _doPDF(){
   if(y<PH-50){
     const layW=(PW-2*M-4)/2, layH=40;
     y = secBar('Layer Layout Reference', y);
-    [[capture2DLayer('A'),'LAYER A TOP VIEW'],[capture2DLayer('B'),'LAYER B TOP VIEW']].forEach(([img,lbl],i)=>{
+    // Images are rendered to this box's exact shape, so they fill it without stretching
+    [[capture2DLayer('A',layW/layH),'LAYER A TOP VIEW'],[capture2DLayer('B',layW/layH),'LAYER B TOP VIEW']].forEach(([img,lbl],i)=>{
       const lx=M+i*(layW+4);
       doc.setFillColor(240,248,255); doc.rect(lx,y,layW,layH,'F');
       if(img){try{doc.addImage(img,'PNG',lx,y,layW,layH,undefined,'FAST');}catch(e){}}
@@ -5466,7 +5458,7 @@ function updateCustomPallet(){
   document.getElementById('palInfo').textContent = ST.isMetric
     ? `${r2(W*25.4)}×${r2(L*25.4)}×${r2(H*25.4)} mm`
     : `${r2(W)}"×${r2(L)}"×${r2(H)}" deck`;
-  _autoCalculate();
+  _autoCalculate(undefined, true);   // new footprint → rebuild layers
 }
 // ── Auto-calculate debounce ─────────────────────────────────────
 // Triggered whenever any core parameter changes (case dims, pallet type,
@@ -5511,22 +5503,38 @@ function _clearPalletState(){
 
   renderAll(); // re-renders stats (now null = hidden) and pattern table (now empty)
 }
-function _autoCalculate(delay){
+// fresh=true  → the pallet or case FOOTPRINT changed (pallet size, custom
+//   pallet dims, edge offset, case L/W). Layer edits made for the old
+//   footprint no longer fit, so every layer is rebuilt from the newly
+//   generated pattern — the same result as pressing Reset All.
+//   Exception: a mixed-case manual build keeps its hand-placed layers.
+// fresh=false → anything else (weight, height, units…): edits are kept.
+let _autoCalcFresh = false;
+function _autoCalculate(delay, fresh){
   clearTimeout(_autoCalcTimer);
+  if(fresh) _autoCalcFresh = true;      // a later non-fresh call must not cancel it
   _autoCalcTimer = setTimeout(()=>{
     const valid = ST.cases.filter(c=>cv(c.w)>0&&cv(c.l)>0&&cv(c.h)>0);
+    const wantFresh = _autoCalcFresh && valid.length === 1;
+    _autoCalcFresh = false;
     if(valid.length > 0){
-      if(ST.stats) ST._preserveEdits = true;
+      const hadEdits = !!(ST.stats && ((ST._patModified && ST._patModified.size) ||
+                          (ST.layerEdits && Object.keys(ST.layerEdits).length)));
+      if(ST.stats && !wantFresh) ST._preserveEdits = true;
+      if(wantFresh){ ST._preserveEdits = false; _leUndoStack = []; }
       calculate();
+      if(wantFresh && hadEdits && typeof leSetStatus==='function')
+        leSetStatus('\u21bb Layers rebuilt for the new size', '#5ec97a');
     }
   }, delay||400);
 }
 
 function selPal(k){
+  const changed = ST.palletKey !== k;
   ST.palletKey=k;
   ST.manualPlacements=null;
   renderPalletBtns();
-  _autoCalculate();
+  _autoCalculate(undefined, changed);
 }
 
 function addCase(){
@@ -5574,7 +5582,9 @@ function updateCase(id, field, val){
     leRenderCasePalette();
     if(ST.stats){ draw2D(); if(ST.view==='3d') build3D(); }
   } else {
-    _autoCalculate();
+    // Length / width change the case footprint → rebuild layers.
+    // Height only changes how many layers fit, so edits are kept.
+    _autoCalculate(undefined, field==='l' || field==='w');
   }
 }
 
@@ -8660,7 +8670,7 @@ function csUse(idx, withPallet){
   renderCaseList();
   if(typeof leRenderCasePalette==='function') leRenderCasePalette();
   csClose();
-  _autoCalculate(50);
+  _autoCalculate(50, true);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
