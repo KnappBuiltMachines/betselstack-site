@@ -783,6 +783,22 @@ function _rot180Layer(pls, pat){
   if(!W||!L||!pls) return pls;
   return pls.map(p=>({...p, x:Math.round((W-p.x-p.w)*1e6)/1e6, y:Math.round((L-p.y-p.l)*1e6)/1e6}));
 }
+// Mixed-case stack height (inches): each layer is as tall as its tallest
+// case, matching the 3D view. Empty layers above the last filled layer are
+// ignored; an empty layer in between counts as the first case's height.
+function mixedStackHeightIn(HI){
+  const valid=ST.cases.filter(c=>cv(c.w)>0&&cv(c.l)>0&&cv(c.h)>0);
+  const fallH=valid.length?cv(valid[0].h):0;
+  const hOf=p=>{const c=p&&p.caseId?ST.cases.find(x=>x.id===p.caseId):null; return c&&cv(c.h)>0?cv(c.h):fallH;};
+  const layerH=[];
+  for(let i=0;i<(HI||0);i++){
+    const pls=(ST.layerEdits&&ST.layerEdits[String(i)])?ST.layerEdits[String(i)]:getPlsForLayer(i);
+    layerH.push(pls&&pls.length?Math.max(...pls.map(hOf)):0);
+  }
+  let last=-1; layerH.forEach((h,i)=>{ if(h>0) last=i; });
+  let tot=0; for(let i=0;i<=last;i++) tot+=layerH[i]>0?layerH[i]:fallH;
+  return tot;
+}
 function getPlsForLayer(layerIdx){
   if(ST.multiMode) return ST.placements;
   if(!ST.patterns.length) return [];
@@ -2902,7 +2918,7 @@ function leUpdateStats(){
   // Convention: L = longest dimension, W = shortest — swap if needed
   const ulLong  = Math.max(unitLoadW, unitLoadL);
   const ulShort = Math.min(unitLoadW, unitLoadL);
-  const caseStackH  = cH * HI;
+  const caseStackH  = (ST.stats.multiCaseManual || ST.stats.multiCase) ? mixedStackHeightIn(HI) : cH * HI;
   const totalH      = r2(pal.h + caseStackH + getSlipSheetH());
 
   // Overhang: use the raw axis values (not swapped) for correct pallet-axis overhang
@@ -3639,9 +3655,9 @@ function buildReportData(){
   const breakdown = isMultiCaseMode ? getCaseBreakdown() : [];
   const totalCasesActual = breakdown.reduce((sum,b)=>sum+b.count,0);
   const totalCaseWeightActual = r2(breakdown.reduce((sum,b)=>sum+b.totalWeight,0));
-  const TI = isMultiCaseMode
-    ? (totalCasesActual > 0 ? totalCasesActual : 'Mixed')
-    : (s?s.TI||s.perLayer||0:0);
+  // In a mixed build every layer can differ, so cases per layer reads "Mixed"
+  // (the pallet total is reported separately as Total Cases).
+  const TI = isMultiCaseMode ? 'Mixed' : (s?s.TI||s.perLayer||0:0);
   const HI = isMultiCaseMode ? 'Mixed' : (s?s.HI||s.layers||1:1);
   const totalCases = isMultiCaseMode
     ? (totalCasesActual > 0 ? totalCasesActual : 'Mixed')
@@ -3765,8 +3781,16 @@ function buildReportData(){
     return 'YES — '+parts.join('; ');
   })(),
     // Case Level
-    caseDims:valid.length>0?`${dp(cv(valid[0].l))}×${dp(cv(valid[0].w))}×${dp(cv(valid[0].h))} ${u()} (L×W×H)`:'—',
-    caseWeight:valid.length>0&&parseFloat(valid[0].wt)?wtFmt(parseFloat(valid[0].wt)):'—',
+    caseDims:valid.length>1
+      ? valid.map(c=>`${c.label||'Case'}: ${dp(cv(c.l))}×${dp(cv(c.w))}×${dp(cv(c.h))}`).join('  ·  ')+` ${u()} (L×W×H)`
+      : valid.length>0?`${dp(cv(valid[0].l))}×${dp(cv(valid[0].w))}×${dp(cv(valid[0].h))} ${u()} (L×W×H)`:'—',
+    caseWeight:valid.length>1
+      ? valid.map(c=>`${c.label||'Case'}: ${parseFloat(c.wt)?wtFmt(parseFloat(c.wt)):'—'}`).join('  ·  ')
+      : valid.length>0&&parseFloat(valid[0].wt)?wtFmt(parseFloat(valid[0].wt)):'—',
+    // One row per case type: label, size, weight (Case Level blocks)
+    caseList: valid.map(c=>({label:c.label||'Case', color:c.color,
+      dims:`${dp(cv(c.l))}×${dp(cv(c.w))}×${dp(cv(c.h))} ${u()}`,
+      weight:parseFloat(c.wt)?wtFmt(parseFloat(c.wt)):'—'})),
     // Multi-case breakdown — array of {label, color, count, weight, totalWeight}
     caseBreakdown: breakdown,
     isMultiCaseMode,
@@ -7354,6 +7378,7 @@ function rbMixedLayerTable(D, props){
           ${(parseFloat(c.wt)||0)>0?`<span style="color:#aaa;font-size:8px;">· ${wtFmt(r2((grandTotals[c.id]||0)*(parseFloat(c.wt)||0)))}</span>`:''}
         </span>`).join('')}
     </div>`;
+  const rows = [];   // one entry per layer: {layer, counts:{caseId:n}, total}
   for(let i=0; i<HIn; i++){
     let pls;
     if(ST.layerEdits && ST.layerEdits[String(i)]) pls = ST.layerEdits[String(i)];
@@ -7444,8 +7469,9 @@ function rbMixedLayerTable(D, props){
 }
 
 function rbStatsCaseLevel(D){
-  const breakdownRows = D.isMultiCaseMode && D.caseBreakdown && D.caseBreakdown.length
-    ? D.caseBreakdown.map(b=>rbRow(b.label, `${b.count} cases${b.weight>0?' · '+wtFmt(b.totalWeight):''}`)).join('')
+  // Several case types: one row each with size and weight
+  const breakdownRows = D.caseList && D.caseList.length > 1
+    ? D.caseList.map(c=>rbRow(`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.color};margin-right:4px;vertical-align:middle;"></span>${c.label}`, `${c.dims} · ${c.weight}`)).join('')
     : rbRow('Case Dimensions', D.caseDims) + rbRow('Case Weight', D.caseWeight);
   return `<div class="rbc-stats" style="font-family:'Share Tech Mono',monospace;">
     ${rbSec('CASE LEVEL')}
@@ -8212,7 +8238,11 @@ function rbPdfStats(doc, block, bx, by, bw, bh, sx, sy){
   const D=buildReportData(); const s=ST.stats;
   const rowH=3.5, headerH=4;
   let rows=[];
-  if(block.type==='statsCaseLevel'){ rows=[['Case Dimensions',D.caseDims],['Case Weight',D.caseWeight]]; }
+  if(block.type==='statsCaseLevel'){
+    rows = (D.caseList && D.caseList.length > 1)
+      ? D.caseList.map(c=>[c.label, `${c.dims} · ${c.weight}`])   // one row per case type
+      : [['Case Dimensions',D.caseDims],['Case Weight',D.caseWeight]];
+  }
   else if(block.type==='statsPalletLevel'){ rows=[['Pattern',D.patName],['Unit Load Dims',D.unitLoadDims],['Unit Load+Pallet',D.palletDims],['OH Length',D.ovL],['OH Width',D.ovW],['TI',D.TI],['HI',D.HI],['Total Cases',D.totalCases],['Pallet Weight',D.totalPalletWeight],['Cubic Eff%',D.cubeEff],[`UL+Pallet Cube (${cubeU()})`,(D.ulPalCube||'—').replace(/ (ft³|m³)$/,'')],['Slip Sheets',D.slipSheets]]; }
   else if(block.type==='statsTruckLevel'){ rows=[['Truck Type',D.truckType],['Pallets/Truck',D.palletsPerTruck],['Total Weight',D.totalWeightPallets]]; }
   else if(block.type==='statsCompact'){ rows=[['TI',D.TI],['HI',D.HI],['Total',D.totalCases],['Cubic Eff',D.cubeEff]]; }
