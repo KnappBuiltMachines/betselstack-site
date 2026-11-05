@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/software", label: "Stack Software" },
   { href: "/pricing", label: "Pricing" },
   { href: "/stack-report", label: "Stack Report" },
-  { href: "/faq", label: "FAQ" },
+  { href: "/founders-corner", label: "Founders Corner" },
   { href: "/contact", label: "Contact" },
 ];
 
