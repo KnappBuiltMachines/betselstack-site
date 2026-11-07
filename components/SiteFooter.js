@@ -1,42 +1,70 @@
 import Link from "next/link";
+
+// Footer links, grouped into columns. Legal links sit in the bottom bar.
+// (No "Home" link: the Betsel Stack logo in the header goes home.)
+const COLUMNS = [
+  {
+    title: "Product",
+    links: [
+      ["/software", "Stack Software"],
+      ["/pricing", "Pricing"],
+      ["/signup", "Start free trial"],
+      ["/login", "Member login"],
+    ],
+  },
+  {
+    title: "Compare",
+    links: [
+      ["/compare/tops-pro-alternative", "TOPS Pro alternative"],
+      ["/compare/cube-iq-alternative", "Cube-IQ alternative"],
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      ["/stack-report", "The Stack Report"],
+      ["/founders-corner", "Founders Corner"],
+      ["/faq", "FAQ"],
+      ["/contact", "Contact"],
+    ],
+  },
+];
+
 export default function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="container">
-        <div className="footer-top">
+        <div className="footer-top footer-top--cols">
           <div>
-            <span className="brand">
+            <Link href="/" className="brand" aria-label="Betsel Stack home">
               <span>Bet<span className="brand-amber">sel</span> Stack</span>
-            </span>
+            </Link>
             <p className="footer-blurb">
-              Powerful packaging engineering &mdash; made practical. Betsel
-              Stack&trade; helps packaging engineers create uniform and
-              mixed-case pallet patterns quickly, check them in 3D, plan the
-              trailer, and export branded reports.
+              Pallet pattern software for packaging engineers.
             </p>
             <p className="footer-blurb footer-motto">
               Focused by design. Powerful where it matters.
             </p>
           </div>
-          <nav className="footer-nav" aria-label="Footer">
-            <Link href="/">Home</Link>
-            <Link href="/software">Stack Software</Link>
-            <Link href="/pricing">Pricing</Link>
-            <Link href="/stack-report">The Stack Report</Link>
-            <Link href="/founders-corner">Founders Corner</Link>
-            <Link href="/faq">FAQ</Link>
-            <Link href="/contact">Contact</Link>
-            <Link href="/login">Member Login</Link>
-            <Link href="/pricing">Get Access</Link>
-            <Link href="/compare/tops-pro-alternative">TOPS Pro Alternative</Link>
-            <Link href="/compare/cube-iq-alternative">Cube-IQ Alternative</Link>
-            <Link href="/privacy">Privacy Policy</Link>
-            <Link href="/terms">Terms of Service</Link>
-          </nav>
+          {COLUMNS.map((col) => (
+            <nav className="footer-col" aria-label={col.title} key={col.title}>
+              <p className="footer-col-title">{col.title}</p>
+              <ul>
+                {col.links.map(([href, label]) => (
+                  <li key={href}>
+                    <Link href={href}>{label}</Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
         <div className="footer-bottom">
           <span>&copy; 2026 Betsel Stack. All rights reserved.</span>
-          <span>betselstack.com</span>
+          <span className="footer-legal">
+            <Link href="/privacy">Privacy Policy</Link>
+            <Link href="/terms">Terms of Service</Link>
+          </span>
         </div>
       </div>
     </footer>
