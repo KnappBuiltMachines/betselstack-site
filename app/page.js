@@ -1,26 +1,27 @@
 // app/page.js — Betsel Stack home page
-// Nov 7 2026 simplification. Three sections, top to bottom:
-//   1. Hero: message on the left, step animation on the right
-//      (Case -> Layer -> Pallet -> Trailer -> Truck -> Warehouse)
-//   2. Why switch (with the TOPS Pro / Cube-IQ comparison links)
-//   3. What we stand for (pillars)
-// Removed from the home page: proof strip, scroll story, review card,
-// pricing, final CTA band. Pricing lives on /pricing.
+// Nov 11 2026 rework. Four sections, top to bottom:
+//   1. Hero: message on the left, animated showcase on the right
+//      (Input -> Output -> 2D / 3D -> PDF Reports, swipe sideways)
+//   2. What we stand for: the four pillars
+//   3. Pricing (#pricing): 7-day trial, monthly and annual plans
+//   4. Why switch (with the TOPS Pro / Cube-IQ comparison links)
+// Pricing now lives here; /pricing stays up for links from the app.
 //
 // Uses:
-//   app/home.css
-//   components/HomeMotion.js   (RevealObserver)
-//   components/HeroSteps.js    (hero animation, all renderings generated in code)
+//   app/home.css, app/showcase.css
+//   components/HomeMotion.js            (RevealObserver)
+//   components/showcase/HomeShowcase.js (hero showcase)
 
 import Link from "next/link";
 import "./home.css";
-import HeroSteps from "@/components/HeroSteps";
+import "./showcase.css";
+import HomeShowcase from "@/components/showcase/HomeShowcase";
 import { RevealObserver } from "@/components/HomeMotion";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
   description:
-    "Pallet pattern software for packaging engineers. Create uniform or mixed-case pallet patterns in seconds, check the load in 3D, plan the trailer, and export branded reports, right in your browser. 7-day free trial, no card.",
+    "Pallet pattern software for packaging engineers. Enter your case and pallet dimensions to generate ranked patterns in seconds, view your load in 3D, and create a professional, branded PDF report. 7-day free trial, no card. $29/month.",
 };
 
 // Brand pillars, each with a simple icon that shows the idea.
@@ -57,24 +58,60 @@ const ICONS = {
 
 const PILLARS = [
   {
+    n: "01",
     icon: "simplify",
     title: "Simplify complexity",
     body: "Enter a case and a pallet. Get ranked patterns back. Easy from day one.",
   },
   {
+    n: "02",
     icon: "time",
     title: "Give engineers their time back",
     body: "No repetitive math, hand-drawn layouts, or spreadsheet rework.",
   },
   {
+    n: "03",
     icon: "real",
     title: "Built for real-world packaging",
     body: "Grounded in how packaging is made, stored, and shipped.",
   },
   {
+    n: "04",
     icon: "access",
     title: "Powerful tools, made accessible",
     body: "Runs in your browser. No bloat, no long onboarding, no enterprise price.",
+  },
+];
+
+const CORE_FEATURES = [
+  "Full Pallet Pattern Creator access",
+  "Real-time 3D load visualization",
+  "Mixed-case pallet patterns",
+  "Standard & custom pallet sizes",
+  "Custom branded PDF reports",
+];
+
+const PLANS = [
+  {
+    key: "monthly",
+    name: "Monthly",
+    price: "$29",
+    per: "/month",
+    sub: "7-day free trial – no credit card required",
+    features: [...CORE_FEATURES, "Cancel anytime"],
+    cta: "Subscribe now — $29/month",
+    fine: "Billed monthly in advance. Cancel anytime from your account page.",
+  },
+  {
+    key: "annual",
+    name: "Annual",
+    badge: "Save 20%",
+    price: "$279",
+    per: "/year",
+    sub: "$23.25/month – you save $69 a year",
+    features: [...CORE_FEATURES, "Rate locked for 12 months"],
+    cta: "Pay yearly — $279",
+    fine: "Paid in full up front and renews yearly. You can turn off renewal at any time; the prepaid year is not refundable.",
   },
 ];
 
@@ -85,17 +122,26 @@ const NOS = [
   ["No sales call.", "Start a full 7-day trial yourself. No card required."],
 ];
 
+function Check() {
+  return (
+    <span className="check" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </span>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="hm">
       <RevealObserver />
 
-      {/* ============ HERO ============ */}
-      <section className="hm-hero hm-hero--split">
+      {/* ============ HERO + SHOWCASE ============ */}
+      <section className="hm-hero hm-hero--split hm-hero--show">
         <div className="hm-floor" aria-hidden="true" />
-        <div className="container hm-split">
+        <div className="container hm-split hm-split--show">
           <div>
-            <p className="hm-kicker rv">Betsel Stack&trade; &middot; Pallet pattern software</p>
             <h1 className="hm-display rv">
               Powerful packaging engineering.
               <span className="hm-dim">Made practical.</span>
@@ -114,17 +160,106 @@ export default function HomePage() {
                 Watch the tour <span aria-hidden="true">&rarr;</span>
               </Link>
             </div>
-            <p className="hm-fine rv">7 days free &middot; no credit card</p>
+            <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
           </div>
           <div className="rv">
-            <HeroSteps />
+            <HomeShowcase />
           </div>
         </div>
       </section>
 
-      {/* ============ WHY SWITCH ============ */}
-      <section className="hm-section">
+      {/* ============ WHAT WE STAND FOR ============ */}
+      <section className="hm-section hm-section--tight" id="why">
         <div className="container">
+          <div className="hm-head rv">
+            <p className="hm-tag">What we stand for</p>
+            <h2 className="hm-h2">
+              Focused by design.
+              <span className="hm-dim">Powerful where it matters.</span>
+            </h2>
+            <p className="hm-lede">
+              Packaging decisions are complex. The software you use to make them
+              shouldn&rsquo;t be.
+            </p>
+          </div>
+          <ul className="hm-pillars hm-pillars--left">
+            {PILLARS.map((p) => (
+              <li className="hm-pillar rv" key={p.title}>
+                <span className="hm-pillar-top">
+                  <span className="hm-pillar-icon">{ICONS[p.icon]}</span>
+                  <span className="hm-pillar-n">{p.n}</span>
+                </span>
+                <h3>{p.title}</h3>
+                <p>{p.body}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ============ PRICING ============ */}
+      <section className="hm-section hm-section--tight hm-price" id="pricing">
+        <div className="container">
+          <div className="hm-price-top hm-price-top--solo">
+            <div className="rv">
+              <p className="hm-tag">Pricing</p>
+              <h2 className="hm-h2">
+                Try it free
+                <span className="hm-dim">for 7 days.</span>
+              </h2>
+              <p className="hm-lede">
+                Powerful tools shouldn&rsquo;t come with enterprise pricing. One
+                plan with everything included: start with a 7-day free trial
+                &mdash; no credit card required &mdash; or subscribe now and jump
+                straight in. Pay monthly, or pay for the year up front and save 20%.
+              </p>
+            </div>
+          </div>
+
+          <div className="hm-plans2">
+            {PLANS.map((p) => (
+              <div className={`price-card hm-plan2 rv${p.badge ? " hm-plan2--best" : ""}`} key={p.key}>
+                <div className="hm-plan2-head">
+                  <span className="price-badge">{p.name}</span>
+                  {p.badge && <span className="hm-plan2-save">{p.badge}</span>}
+                </div>
+                <div className="price-amount">
+                  <span className="big">{p.price}</span>
+                  <span className="per">{p.per}</span>
+                </div>
+                <p className="price-sub">{p.sub}</p>
+                <ul className="price-list">
+                  {p.features.map((f) => (
+                    <li key={f}>
+                      <Check />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/signup" className="btn btn--primary btn--block">
+                  Start 7-day free trial
+                </Link>
+                <Link href="/subscribe" className="btn btn--ghost btn--block" style={{ marginTop: 10 }}>
+                  {p.cta}
+                </Link>
+                <p className="price-fine">{p.fine}</p>
+              </div>
+            ))}
+          </div>
+          <p className="price-fine hm-price-note rv">
+            The free trial needs no card and works with either plan &mdash; pick
+            monthly or yearly when it ends. Already have an account?{" "}
+            <Link href="/login" style={{ color: "var(--amber)" }}>
+              Log in
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
+      {/* ============ WHY SWITCH ============ */}
+      <section className="hm-section hm-section--tight">
+        <div className="container hm-why">
           <div className="hm-head rv">
             <p className="hm-tag">Why switch</p>
             <h2 className="hm-h2">
@@ -132,7 +267,7 @@ export default function HomePage() {
               <span className="hm-dim">without the enterprise baggage.</span>
             </h2>
           </div>
-          <div className="hm-nos">
+          <div className="hm-nos hm-nos--2">
             {NOS.map(([t, d]) => (
               <div className="hm-no rv" key={t}>
                 <h3>{t}</h3>
@@ -145,33 +280,7 @@ export default function HomePage() {
             <Link href="/compare/tops-pro-alternative">TOPS Pro</Link> and{" "}
             <Link href="/compare/cube-iq-alternative">Cube-IQ</Link>.
           </p>
-        </div>
-      </section>
-
-      {/* ============ WHAT WE STAND FOR ============ */}
-      <section className="hm-section" id="why">
-        <div className="container">
-          <div className="hm-head hm-head--center rv">
-            <p className="hm-tag">What we stand for</p>
-            <h2 className="hm-h2">
-              Focused by design.
-              <span className="hm-dim">Powerful where it matters.</span>
-            </h2>
-            <p className="hm-lede">
-              Packaging decisions are complex. The software you use to make them
-              shouldn&rsquo;t be.
-            </p>
-          </div>
-          <ul className="hm-pillars">
-            {PILLARS.map((p) => (
-              <li className="hm-pillar rv" key={p.title}>
-                <span className="hm-pillar-icon">{ICONS[p.icon]}</span>
-                <h3>{p.title}</h3>
-                <p>{p.body}</p>
-              </li>
-            ))}
-          </ul>
-          <div className="hm-actions hm-pillars-cta rv">
+          <div className="hm-actions hm-why-cta rv">
             <Link href="/signup" className="btn btn--primary hm-btn-lg">
               Start free trial
             </Link>

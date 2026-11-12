@@ -7,7 +7,7 @@ const COLUMNS = [
     title: "Product",
     links: [
       ["/software", "Stack Software"],
-      ["/pricing", "Pricing"],
+      ["/#pricing", "Pricing"],
       ["/signup", "Start free trial"],
       ["/login", "Member login"],
     ],
@@ -23,7 +23,6 @@ const COLUMNS = [
     title: "Resources",
     links: [
       ["/stack-report", "The Stack Report"],
-      ["/founders-corner", "Founders Corner"],
       ["/faq", "FAQ"],
       ["/contact", "Contact"],
     ],

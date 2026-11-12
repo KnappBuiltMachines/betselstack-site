@@ -24,7 +24,6 @@ export default function sitemap() {
     { url: `${SITE}/pricing`,  lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/stack-report`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     ...posts,
-    { url: `${SITE}/founders-corner`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE}/compare/tops-pro-alternative`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/compare/cube-iq-alternative`,  lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/contact`,  lastModified: now, changeFrequency: "yearly",  priority: 0.5 },
