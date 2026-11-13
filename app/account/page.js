@@ -77,6 +77,9 @@ export default async function AccountPage() {
             <Link href="/builder" className="btn btn--primary btn--block" style={{ marginBottom: 10 }}>
               Open the Pallet Builder
             </Link>
+            <Link href="/qualification-plans" className="btn btn--ghost btn--block" style={{ marginBottom: 10 }}>
+              Qualification Plans
+            </Link>
             <Link href="/m" className="btn btn--ghost btn--block" style={{ marginBottom: 18 }}>
               Mobile version &mdash; review saved files
             </Link>
