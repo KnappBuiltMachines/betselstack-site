@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { OPTIONS, emptyInputs, buildPlan, composeDocument, nextRevision } from "@/lib/qualification/engine";
+import { OPTIONS, emptyInputs, buildPlan, composeDocument, nextRevision, approversOf } from "@/lib/qualification/engine";
 import DocumentView from "@/components/qualification/DocumentView";
 
-const STEPS = ["Identification", "Product", "Packaging Materials", "Distribution", "Background & Scope", "Tests & Review"];
+const STEPS = ["Identification", "Product", "Packaging Materials", "Distribution", "Background & Scope", "Line Trials", "Tests & Review"];
+const LAST = STEPS.length - 1;
 
 // ---------- small field helpers ----------
 function Field({ label, hint, children, wide }) {
@@ -47,12 +48,15 @@ function Check({ label, checked, onChange }) {
 export default function PlanWizard({ plan }) {
   const router = useRouter();
   const editing = !!plan;
-  const [inputs, setInputs] = useState(() => ({ ...emptyInputs(), ...(plan?.inputs || {}) }));
+  const [inputs, setInputs] = useState(() => {
+    const base = { ...emptyInputs(), ...(plan?.inputs || {}) };
+    return { ...base, approvers: approversOf(base).map((a) => ({ ...a })) };
+  });
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(false);
-  const mustRevise = editing && plan.status === "approved";
+  const mustRevise = editing && ["approved", "completed", "obsolete"].includes(plan.status);
   const [asRevision, setAsRevision] = useState(mustRevise);
   const [revNote, setRevNote] = useState("");
 
@@ -79,6 +83,28 @@ export default function PlanWizard({ plan }) {
   const addCustom = () =>
     setInputs((s) => ({ ...s, customTests: [...(s.customTests || []), { name: "", standard: "", purpose: "", samples: "", priority: "Required" }] }));
   const delCustom = (idx) => setInputs((s) => ({ ...s, customTests: s.customTests.filter((_, j) => j !== idx) }));
+
+  // ---------- line trials ----------
+  const toggleLT = (id, on) =>
+    setInputs((s) => {
+      const ex = new Set(s.excludedLineTrials || []);
+      on ? ex.delete(id) : ex.add(id);
+      return { ...s, excludedLineTrials: [...ex] };
+    });
+  const setLTDetail = (id, k, v) =>
+    setInputs((s) => ({ ...s, lineTrialDetails: { ...(s.lineTrialDetails || {}), [id]: { ...((s.lineTrialDetails || {})[id] || {}), [k]: v } } }));
+  const setCustomLT = (idx, k, v) =>
+    setInputs((s) => ({ ...s, customLineTrials: s.customLineTrials.map((t, j) => (j === idx ? { ...t, [k]: v } : t)) }));
+  const addCustomLT = () =>
+    setInputs((s) => ({ ...s, customLineTrials: [...(s.customLineTrials || []), { name: "", line: "", speed: "", runQty: "", measures: "", acceptance: "" }] }));
+  const delCustomLT = (idx) => setInputs((s) => ({ ...s, customLineTrials: s.customLineTrials.filter((_, j) => j !== idx) }));
+
+  // ---------- approvers ----------
+  const setApprover = (idx, k, v) =>
+    setInputs((s) => ({ ...s, approvers: s.approvers.map((a, j) => (j === idx ? { ...a, [k]: v } : a)) }));
+  const addApprover = () =>
+    setInputs((s) => ({ ...s, approvers: [...s.approvers, { id: `ap${Date.now().toString(36)}`, role: "", name: "" }] }));
+  const delApprover = (idx) => setInputs((s) => ({ ...s, approvers: s.approvers.filter((_, j) => j !== idx) }));
 
   const canSave = !!(inputs.productName || inputs.title).trim();
 
@@ -113,6 +139,8 @@ export default function PlanWizard({ plan }) {
             ...(plan || {}),
             revision: editing && asRevision ? nextRevision(plan.revision) : plan?.revision || "A",
             status: editing && asRevision ? "draft" : plan?.status || "draft",
+            approvals: editing && asRevision ? [] : plan?.approvals,
+            results: editing && asRevision ? {} : plan?.results,
             inputs,
             content: computed,
           })
@@ -159,6 +187,16 @@ export default function PlanWizard({ plan }) {
             <Field label="Reason for qualification"><Select list="changeType" value={inputs.changeType} onChange={set("changeType")} /></Field>
             <Field label="Prepared by"><Text value={inputs.preparedBy} onChange={set("preparedBy")} /></Field>
             <Field label="Company / department"><Text value={inputs.company} onChange={set("company")} /></Field>
+            <Field label="Approvers" hint="Each role signs electronically once the plan is submitted for approval. The plan is Approved when every role has signed." wide>
+              {inputs.approvers.map((a, k) => (
+                <div className="qp-approver-row" key={a.id}>
+                  <Text value={a.role} onChange={(v) => setApprover(k, "role", v)} placeholder="Role (e.g. Quality Assurance)" />
+                  <Text value={a.name} onChange={(v) => setApprover(k, "name", v)} placeholder="Name (optional)" />
+                  <button type="button" className="qp-x" onClick={() => delApprover(k)} disabled={inputs.approvers.length <= 1} aria-label="Remove approver">&times;</button>
+                </div>
+              ))}
+              <button type="button" className="btn btn--ghost" onClick={addApprover}>+ Add approver</button>
+            </Field>
           </div>
         )}
 
@@ -249,6 +287,54 @@ export default function PlanWizard({ plan }) {
 
         {step === 5 && (
           <div>
+            <p className="qp-sub" style={{ marginBottom: 14 }}>
+              Production-line trials prove the packaging runs on your equipment (e.g. aluminum can filling and seaming).
+              Suggestions come from the materials in step 3 &mdash; uncheck any you don&rsquo;t need and add your own.
+            </p>
+            {computed.lineTrialsRecommended.length === 0 && (
+              <p className="qp-hint" style={{ marginBottom: 14 }}>No suggested line trials for these materials and change type. Add a custom trial below if needed.</p>
+            )}
+            <div className="qp-tests">
+              {computed.lineTrialsRecommended.map((t) => {
+                const on = !(inputs.excludedLineTrials || []).includes(t.id);
+                const d = (inputs.lineTrialDetails || {})[t.id] || {};
+                return (
+                  <div key={t.id} className={`qp-test ${on ? "" : "is-off"}`}>
+                    <input type="checkbox" checked={on} onChange={(e) => toggleLT(t.id, e.target.checked)} aria-label={`Include ${t.name}`} />
+                    <div style={{ flex: 1 }}>
+                      <div className="qp-test__name">{t.name} <span className="qp-std">{d.line || t.line}</span></div>
+                      <div className="qp-test__why">{t.measures}</div>
+                      {on && (
+                        <div className="qp-lt-fields">
+                          <Text value={d.line ?? t.line} onChange={(v) => setLTDetail(t.id, "line", v)} placeholder="Line / equipment" />
+                          <Text value={d.speed ?? ""} onChange={(v) => setLTDetail(t.id, "speed", v)} placeholder="Target speed (e.g. 600 cans/min)" />
+                          <Text value={d.runQty ?? ""} onChange={(v) => setLTDetail(t.id, "runQty", v)} placeholder="Run size (e.g. 2 pallets, 30 min)" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <h3 className="qp-h3">Custom line trials</h3>
+            {(inputs.customLineTrials || []).map((t, k) => (
+              <div className="qp-customlt" key={k}>
+                <Text value={t.name} onChange={(v) => setCustomLT(k, "name", v)} placeholder="Trial name" />
+                <Text value={t.line} onChange={(v) => setCustomLT(k, "line", v)} placeholder="Line / equipment" />
+                <Text value={t.speed} onChange={(v) => setCustomLT(k, "speed", v)} placeholder="Target speed" />
+                <Text value={t.runQty} onChange={(v) => setCustomLT(k, "runQty", v)} placeholder="Run size" />
+                <button type="button" className="qp-x" onClick={() => delCustomLT(k)} aria-label="Remove trial">&times;</button>
+                <Text value={t.measures} onChange={(v) => setCustomLT(k, "measures", v)} placeholder="What to measure" />
+                <Text value={t.acceptance} onChange={(v) => setCustomLT(k, "acceptance", v)} placeholder="Acceptance criteria" />
+              </div>
+            ))}
+            <button type="button" className="btn btn--ghost" onClick={addCustomLT}>+ Add custom line trial</button>
+          </div>
+        )}
+
+        {step === LAST && (
+          <div>
             <div className={`qp-riskcard qp-riskcard--${risk.level.toLowerCase()}`}>
               <div>
                 <div className="qp-riskcard__lvl">{risk.level} risk</div>
@@ -302,9 +388,12 @@ export default function PlanWizard({ plan }) {
             {editing && (
               <div className="qp-revbox">
                 {mustRevise ? (
-                  <p>This plan is <strong>Approved</strong>. Saving will create <strong>Rev {nextRevision(plan.revision)}</strong> as a new draft.</p>
+                  <p>This plan is <strong>{plan.status === "completed" ? "Completed" : plan.status === "obsolete" ? "Obsolete" : "Approved"}</strong>. Saving will create <strong>Rev {nextRevision(plan.revision)}</strong> as a new draft; it will need new signatures and results.</p>
                 ) : (
                   <Check label={`Save as new revision (Rev ${nextRevision(plan.revision)})`} checked={asRevision} onChange={setAsRevision} />
+                )}
+                {!asRevision && plan.status === "in_review" && (
+                  <p className="qp-hint">This plan is in review. Saving changes clears any signatures and returns it to Draft.</p>
                 )}
                 {asRevision && (
                   <Field label="What changed in this revision?">
@@ -323,7 +412,7 @@ export default function PlanWizard({ plan }) {
         <button type="button" className="btn btn--ghost" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>Back</button>
         <div className="qp-nav__right">
           <button type="button" className="btn btn--ghost" onClick={() => setPreview(true)}>Preview document</button>
-          {step < STEPS.length - 1 ? (
+          {step < LAST ? (
             <button type="button" className="btn btn--primary" onClick={() => setStep((s) => s + 1)}>Next</button>
           ) : (
             <button type="button" className="btn btn--primary" disabled={saving} onClick={save}>
