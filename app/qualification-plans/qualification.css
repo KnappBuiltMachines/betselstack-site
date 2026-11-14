@@ -97,7 +97,7 @@ select.input { appearance: auto; }
   display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; cursor: pointer;
   border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--ink-2);
 }
-.qp-test input { accent-color: var(--amber); width: 16px; height: 16px; margin-top: 3px; }
+.qp-test > input[type="checkbox"] { flex: 0 0 auto; accent-color: var(--amber); width: 16px; height: 16px; margin-top: 3px; }
 .qp-test.is-off { opacity: 0.45; }
 .qp-test__name { font-weight: 600; font-size: 14.5px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .qp-test__why { color: var(--muted); font-size: 13.5px; margin-top: 4px; }

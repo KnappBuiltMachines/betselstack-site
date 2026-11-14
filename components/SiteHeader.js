@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const LINKS = [
   { href: "/software", label: "Stack Software" },
+  { href: "/new-features", label: "New Features" },
   { href: "/stack-report", label: "Stack Report" },
   { href: "/contact", label: "Contact" },
 ];

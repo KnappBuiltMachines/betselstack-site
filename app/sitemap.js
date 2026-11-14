@@ -21,6 +21,7 @@ export default function sitemap() {
   return [
     { url: `${SITE}/`,        lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
     { url: `${SITE}/software`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE}/new-features`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/pricing`,  lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/stack-report`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     ...posts,
