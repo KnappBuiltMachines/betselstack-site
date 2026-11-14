@@ -16,6 +16,9 @@ export default async function BuilderPage() {
   const access = await getAccess(supabase, user.id);
   if (!access.allowed) redirect("/pricing");
 
+  const displayName =
+    (user.user_metadata?.full_name || user.user_metadata?.name || "").trim() || user.email || "";
+
   return (
     <div
       style={{
@@ -36,12 +39,12 @@ export default async function BuilderPage() {
           padding: "10px 16px",
         }}
       >
-        <Link href="/" style={{ fontFamily: "var(--display)", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--amber)" }}>
-          &larr; Betsel Stack
+        <Link href="/account" style={{ fontFamily: "var(--display)", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--amber)" }}>
+          &larr; Account
         </Link>
-        <Link href="/account" style={{ fontSize: 12, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--muted)" }}>
-          Account
-        </Link>
+        <span style={{ fontSize: 13, color: "var(--muted)", maxWidth: "50%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {displayName}
+        </span>
       </div>
 
       {access.reason === "past_due" && (
