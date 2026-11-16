@@ -2,6 +2,8 @@
 // Exports a composed qualification plan to a real (text, searchable) PDF using
 // jsPDF — the same library and CDN build the Pallet Builder already uses.
 
+import { hexToRgb, imageSize, DEFAULT_BRANDING } from "@/components/qualification/branding";
+
 const JSPDF_SRC = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
 
 function loadJsPdf() {
@@ -32,14 +34,15 @@ const pdfText = (s) =>
     .replace(/•/g, "-")
     .replace(/[^\x09\x0a\x0d\x20-\x7e -ÿ]/g, "");
 
-const AMBER = [253, 180, 16];
 const INK = [20, 22, 26];
 const MUTED = [110, 116, 126];
 const LINE = [205, 209, 214];
 const SHADE = [244, 245, 247];
 
-export async function exportPlanPdf(doc, fileName) {
+export async function exportPlanPdf(doc, fileName, branding) {
   const JsPDF = await loadJsPdf();
+  const B = { ...DEFAULT_BRANDING, ...(branding || {}) };
+  const BRAND = hexToRgb(B.brandColor); // accent color from Report settings
   const pdf = new JsPDF({ unit: "pt", format: "letter" });
   const W = pdf.internal.pageSize.getWidth();
   const H = pdf.internal.pageSize.getHeight();
@@ -136,9 +139,40 @@ export async function exportPlanPdf(doc, fileName) {
     y += 10;
   };
 
+  // ---- Company logo / name (page 1) ----------------------------------------
+  if (B.logoDataUrl || B.companyName) {
+    const bandTop = 34;
+    let x = M;
+    let bandH = 14;
+    if (B.logoDataUrl) {
+      const sz = await imageSize(B.logoDataUrl);
+      if (sz) {
+        const maxH = 40;
+        const maxW = 170;
+        const k = Math.min(maxW / sz.w, maxH / sz.h);
+        const w = sz.w * k;
+        const h = sz.h * k;
+        const fmt = /^data:image\/jpe?g/i.test(B.logoDataUrl) ? "JPEG" : "PNG";
+        try {
+          pdf.addImage(B.logoDataUrl, fmt, x, bandTop, w, h);
+          x += w + 12;
+          bandH = Math.max(bandH, h);
+        } catch {
+          /* unreadable image — skip the logo rather than fail the export */
+        }
+      }
+    }
+    if (B.companyName) {
+      setFont(12, "bold", INK);
+      pdf.text(pdfText(B.companyName), x, bandTop + bandH / 2 + 4);
+    }
+    y = Math.max(TOP, bandTop + bandH + 26);
+  }
+  const titleTop = y;
+
   // ---- Title block (page 1) ------------------------------------------------
   setFont(8, "bold", MUTED);
-  pdf.text("PACKAGING QUALIFICATION PLAN", M, y);
+  pdf.text(pdfText(B.reportTitle.toUpperCase()), M, y);
   setFont(16, "bold", INK);
   pdf.text(pdfText(header.planNumber), W - M, y + 4, { align: "right" });
   y += 8;
@@ -149,9 +183,9 @@ export async function exportPlanPdf(doc, fileName) {
     y += lh(17);
   });
   setFont(9, "normal", MUTED);
-  pdf.text(pdfText(`Rev ${header.revision}  |  ${header.date}`), W - M, TOP + 26, { align: "right" });
+  pdf.text(pdfText(`Rev ${header.revision}  |  ${header.date}`), W - M, titleTop + 26, { align: "right" });
   y += 8;
-  pdf.setFillColor(...AMBER);
+  pdf.setFillColor(...BRAND);
   pdf.rect(M, y, CW, 2.5, "F");
   y += 12;
 
@@ -194,7 +228,7 @@ export async function exportPlanPdf(doc, fileName) {
     setFont(12, "bold", INK);
     pdf.text(pdfText(`${s.num}.  ${s.title.toUpperCase()}`), M, y + 12);
     y += lh(12) + 2;
-    pdf.setDrawColor(...AMBER);
+    pdf.setDrawColor(...BRAND);
     pdf.setLineWidth(1);
     pdf.line(M, y, M + 40, y);
     y += 8;
@@ -226,10 +260,11 @@ export async function exportPlanPdf(doc, fileName) {
     pdf.setLineWidth(0.5);
     pdf.line(M, H - 38, W - M, H - 38);
     setFont(7.5, "normal", MUTED);
-    pdf.text(pdfText(`${header.status}  |  Uncontrolled when printed`), M, H - 26);
+    const foot = pdf.splitTextToSize(pdfText(`${header.status}  |  ${B.footerText}`), CW - 80)[0];
+    pdf.text(foot, M, H - 26);
     pdf.text(`Page ${p} of ${pages}`, W - M, H - 26, { align: "right" });
   }
 
-  pdf.setProperties({ title: pdfText(`${header.planNumber} ${header.title}`), subject: "Packaging Qualification Plan" });
+  pdf.setProperties({ title: pdfText(`${header.planNumber} ${header.title}`), subject: pdfText(B.reportTitle), author: pdfText(B.companyName) });
   pdf.save(fileName || `${header.planNumber}_Rev${header.revision}.pdf`);
 }

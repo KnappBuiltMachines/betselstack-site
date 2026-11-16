@@ -14,6 +14,8 @@ import {
 } from "@/lib/qualification/engine";
 import DocumentView from "@/components/qualification/DocumentView";
 import { exportPlanPdf } from "@/components/qualification/exportPdf";
+import { useBranding } from "@/components/qualification/branding";
+import BrandingSettings from "@/components/qualification/BrandingSettings";
 
 const STATUS_HELP = {
   draft: "Edit freely. Submit for approval when the plan is ready.",
@@ -36,6 +38,8 @@ export default function PlanViewer({ initialPlan }) {
   const [outcome, setOutcome] = useState("qualified");
   const [conclNotes, setConclNotes] = useState("");
   const [conclName, setConclName] = useState("");
+  const { branding, save: saveBranding } = useBranding();
+  const [brandOpen, setBrandOpen] = useState(false);
 
   // Dates/times are shown in the viewer's own time zone, so render after mount
   // (avoids a server/browser time-zone mismatch on first paint).
@@ -106,7 +110,7 @@ export default function PlanViewer({ initialPlan }) {
     setErr("");
     try {
       const safe = (plan.title || "").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
-      await exportPlanPdf(doc, `${plan.plan_number}_Rev${plan.revision}${safe ? "_" + safe : ""}.pdf`);
+      await exportPlanPdf(doc, `${plan.plan_number}_Rev${plan.revision}${safe ? "_" + safe : ""}.pdf`, branding);
     } catch (e) {
       setErr(e.message);
     }
@@ -147,6 +151,7 @@ export default function PlanViewer({ initialPlan }) {
           <p className="qp-sub">{plan.title}</p>
         </div>
         <div className="qp-actions">
+          <button type="button" className="btn btn--ghost" onClick={() => setBrandOpen(true)}>Report settings</button>
           <Link href={`/qualification-plans/${plan.id}/edit`} className="btn btn--ghost">
             {locked ? "New revision" : "Edit"}
           </Link>
@@ -273,7 +278,7 @@ export default function PlanViewer({ initialPlan }) {
                       <td><input className="input" type="date" value={r.date || ""} disabled={ro} onChange={(e) => setR(t.id, "date", e.target.value)} /></td>
                       <td>
                         <textarea className="input qp-obs" rows={1} value={r.value || ""} disabled={ro} onChange={(e) => setR(t.id, "value", e.target.value)}
-                          placeholder={t.kind === "Line trial" ? "e.g. 598 cans/min avg, 2 jams, seams in spec" : "e.g. BCT 742 lbf mean, no damage"} />
+                          placeholder={t.kind === "Line trial" ? "e.g. 118 units/min avg, 2 stoppages, all checks in spec" : "e.g. BCT 742 lbf mean, no damage"} />
                       </td>
                       <td><input className="input" value={r.by || ""} disabled={ro} onChange={(e) => setR(t.id, "by", e.target.value)} /></td>
                     </tr>
@@ -317,7 +322,9 @@ export default function PlanViewer({ initialPlan }) {
         </div>
       )}
 
-      <DocumentView doc={doc} />
+      <DocumentView doc={doc} branding={branding} />
+
+      {brandOpen && <BrandingSettings branding={branding} save={saveBranding} onClose={() => setBrandOpen(false)} />}
 
       <div className="qp-foot">
         <button type="button" className="qp-danger" disabled={!!busy} onClick={remove}>Delete this plan</button>

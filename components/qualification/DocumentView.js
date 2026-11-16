@@ -56,13 +56,20 @@ function Block({ b, secNum }) {
   return null;
 }
 
-export default function DocumentView({ doc }) {
+export default function DocumentView({ doc, branding }) {
   const { header, sections } = doc;
+  const b = branding || {};
   return (
-    <article className="qp-paper">
+    <article className="qp-paper" style={b.brandColor ? { "--qp-brand": b.brandColor } : undefined}>
+      {(b.logoDataUrl || b.companyName) && (
+        <div className="qp-paper__brand">
+          {b.logoDataUrl && <img className="qp-paper__logo" src={b.logoDataUrl} alt={b.companyName ? `${b.companyName} logo` : "Company logo"} />}
+          {b.companyName && <span className="qp-paper__company">{b.companyName}</span>}
+        </div>
+      )}
       <header className="qp-paper__head">
         <div>
-          <div className="qp-paper__eyebrow">Packaging Qualification Plan</div>
+          <div className="qp-paper__eyebrow">{b.reportTitle || "Packaging Qualification Plan"}</div>
           <h1 className="qp-paper__title">{header.title}</h1>
         </div>
         <div className="qp-paper__id">
@@ -93,6 +100,11 @@ export default function DocumentView({ doc }) {
           ))}
         </section>
       ))}
+
+      <footer className="qp-paper__foot">
+        <span>{header.status} &nbsp;|&nbsp; {b.footerText || "Uncontrolled when printed"}</span>
+        <span>{header.planNumber} Rev {header.revision}</span>
+      </footer>
     </article>
   );
 }

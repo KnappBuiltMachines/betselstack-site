@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { STATUS_LABELS } from "@/lib/qualification/engine";
+import { useBranding } from "@/components/qualification/branding";
+import BrandingSettings from "@/components/qualification/BrandingSettings";
 
 export default function PlanList() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [plans, setPlans] = useState(null);
   const [err, setErr] = useState("");
+  const { branding, save: saveBranding } = useBranding();
+  const [brandOpen, setBrandOpen] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -40,8 +44,13 @@ export default function PlanList() {
           <h1 className="qp-h1">Qualification Plans</h1>
           <p className="qp-sub">Create, revise and export packaging qualification plans.</p>
         </div>
-        <Link href="/qualification-plans/new" className="btn btn--primary">+ New plan</Link>
+        <div className="qp-actions">
+          <button type="button" className="btn btn--ghost" onClick={() => setBrandOpen(true)}>Report settings</button>
+          <Link href="/qualification-plans/new" className="btn btn--primary">+ New plan</Link>
+        </div>
       </div>
+
+      {brandOpen && <BrandingSettings branding={branding} save={saveBranding} onClose={() => setBrandOpen(false)} />}
 
       <div className="qp-filters">
         <input

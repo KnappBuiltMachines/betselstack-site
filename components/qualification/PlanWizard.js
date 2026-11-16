@@ -3,8 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { OPTIONS, emptyInputs, buildPlan, composeDocument, nextRevision, approversOf } from "@/lib/qualification/engine";
+import {
+  OPTIONS, emptyInputs, buildPlan, composeDocument, nextRevision, approversOf,
+  lineTrialsOf, starterLineTrials, blankLineTrial,
+} from "@/lib/qualification/engine";
 import DocumentView from "@/components/qualification/DocumentView";
+import { useBranding } from "@/components/qualification/branding";
 
 const STEPS = ["Identification", "Product", "Packaging Materials", "Distribution", "Background & Scope", "Line Trials", "Tests & Review"];
 const LAST = STEPS.length - 1;
@@ -50,7 +54,14 @@ export default function PlanWizard({ plan }) {
   const editing = !!plan;
   const [inputs, setInputs] = useState(() => {
     const base = { ...emptyInputs(), ...(plan?.inputs || {}) };
-    return { ...base, approvers: approversOf(base).map((a) => ({ ...a })) };
+    // One editable list of line-trial steps (older plans are converted on open).
+    const lt = lineTrialsOf(base);
+    const { excludedLineTrials, lineTrialDetails, customLineTrials, ...rest } = base;
+    return {
+      ...rest,
+      lineTrials: lt.length ? lt.map((t) => ({ ...t })) : starterLineTrials(),
+      approvers: approversOf(base).map((a) => ({ ...a })),
+    };
   });
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -59,6 +70,7 @@ export default function PlanWizard({ plan }) {
   const mustRevise = editing && ["approved", "completed", "obsolete"].includes(plan.status);
   const [asRevision, setAsRevision] = useState(mustRevise);
   const [revNote, setRevNote] = useState("");
+  const { branding } = useBranding();
 
   const set = (k) => (v) => setInputs((s) => ({ ...s, [k]: v }));
   const computed = useMemo(() => buildPlan(inputs), [inputs]);
@@ -68,7 +80,7 @@ export default function PlanWizard({ plan }) {
   const setMat = (idx, k, v) =>
     setInputs((s) => ({ ...s, materials: s.materials.map((m, j) => (j === idx ? { ...m, [k]: v } : m)) }));
   const addMat = () =>
-    setInputs((s) => ({ ...s, materials: [...s.materials, { level: "secondary", type: "corrugated", component: "", spec: "", supplier: "" }] }));
+    setInputs((s) => ({ ...s, materials: [...s.materials, { level: "secondary", type: "corrugated", typeOther: "", component: "", spec: "", supplier: "" }] }));
   const delMat = (idx) => setInputs((s) => ({ ...s, materials: s.materials.filter((_, j) => j !== idx) }));
 
   // ---------- tests ----------
@@ -85,19 +97,27 @@ export default function PlanWizard({ plan }) {
   const delCustom = (idx) => setInputs((s) => ({ ...s, customTests: s.customTests.filter((_, j) => j !== idx) }));
 
   // ---------- line trials ----------
-  const toggleLT = (id, on) =>
+  const setLT = (idx, k, v) =>
+    setInputs((s) => ({ ...s, lineTrials: s.lineTrials.map((t, j) => (j === idx ? { ...t, [k]: v } : t)) }));
+  const addLT = (from) =>
     setInputs((s) => {
-      const ex = new Set(s.excludedLineTrials || []);
-      on ? ex.delete(id) : ex.add(id);
-      return { ...s, excludedLineTrials: [...ex] };
+      const list = s.lineTrials || [];
+      const step = from
+        ? { ...blankLineTrial(), name: from.name, line: from.line, measures: from.measures, acceptance: from.acceptance }
+        : blankLineTrial();
+      // A suggestion fills the first empty step if there is one, otherwise it's added at the end.
+      const empty = from ? list.findIndex((t) => !Object.entries(t).some(([k, v]) => k !== "id" && String(v || "").trim())) : -1;
+      return { ...s, lineTrials: empty >= 0 ? list.map((t, j) => (j === empty ? { ...step, id: t.id } : t)) : [...list, step] };
     });
-  const setLTDetail = (id, k, v) =>
-    setInputs((s) => ({ ...s, lineTrialDetails: { ...(s.lineTrialDetails || {}), [id]: { ...((s.lineTrialDetails || {})[id] || {}), [k]: v } } }));
-  const setCustomLT = (idx, k, v) =>
-    setInputs((s) => ({ ...s, customLineTrials: s.customLineTrials.map((t, j) => (j === idx ? { ...t, [k]: v } : t)) }));
-  const addCustomLT = () =>
-    setInputs((s) => ({ ...s, customLineTrials: [...(s.customLineTrials || []), { name: "", line: "", speed: "", runQty: "", measures: "", acceptance: "" }] }));
-  const delCustomLT = (idx) => setInputs((s) => ({ ...s, customLineTrials: s.customLineTrials.filter((_, j) => j !== idx) }));
+  const delLT = (idx) => setInputs((s) => ({ ...s, lineTrials: s.lineTrials.filter((_, j) => j !== idx) }));
+  const moveLT = (idx, d) =>
+    setInputs((s) => {
+      const list = [...s.lineTrials];
+      const to = idx + d;
+      if (to < 0 || to >= list.length) return s;
+      [list[idx], list[to]] = [list[to], list[idx]];
+      return { ...s, lineTrials: list };
+    });
 
   // ---------- approvers ----------
   const setApprover = (idx, k, v) =>
@@ -229,21 +249,29 @@ export default function PlanWizard({ plan }) {
 
         {step === 2 && (
           <div>
-            <p className="qp-sub" style={{ marginBottom: 16 }}>List every component in the packaging system, from primary package to unit load.</p>
+            <p className="qp-sub" style={{ marginBottom: 16 }}>
+              Identify each packaging material being qualified, from the primary package through the unit load.
+              Choose a material from the list, or select &ldquo;Other (write in)&rdquo; to enter your own.
+            </p>
             <div className="qp-mat-head">
               <span>Level</span><span>Material</span><span>Component</span><span>Specification</span><span>Supplier</span><span />
             </div>
             {inputs.materials.map((m, k) => (
               <div className="qp-mat-row" key={k}>
                 <Select list="materialLevel" value={m.level} onChange={(v) => setMat(k, "level", v)} />
-                <Select list="materialType" value={m.type} onChange={(v) => setMat(k, "type", v)} />
+                <div className="qp-mat-type">
+                  <Select list="materialType" value={m.type} onChange={(v) => setMat(k, "type", v)} />
+                  {m.type === "other" && (
+                    <Text value={m.typeOther} onChange={(v) => setMat(k, "typeOther", v)} placeholder="Type the material" autoFocus={!m.typeOther} />
+                  )}
+                </div>
                 <Text value={m.component} onChange={(v) => setMat(k, "component", v)} placeholder="e.g. RSC shipper" />
                 <Text value={m.spec} onChange={(v) => setMat(k, "spec", v)} placeholder="e.g. 32 ECT C-flute" />
                 <Text value={m.supplier} onChange={(v) => setMat(k, "supplier", v)} />
-                <button type="button" className="qp-x" onClick={() => delMat(k)} aria-label="Remove component">&times;</button>
+                <button type="button" className="qp-x" onClick={() => delMat(k)} aria-label="Remove material">&times;</button>
               </div>
             ))}
-            <button type="button" className="btn btn--ghost" onClick={addMat}>+ Add component</button>
+            <button type="button" className="btn btn--ghost" onClick={addMat}>+ Add material</button>
             <div className="qp-grid" style={{ marginTop: 24 }}>
               <Field label="Pallet pattern reference (optional)" hint="e.g. your saved Betsel Stack pattern name, Ti × Hi" wide>
                 <Text value={inputs.palletPatternRef} onChange={set("palletPatternRef")} placeholder="e.g. 10 × 6 interlock, 60 cases" />
@@ -288,48 +316,57 @@ export default function PlanWizard({ plan }) {
         {step === 5 && (
           <div>
             <p className="qp-sub" style={{ marginBottom: 14 }}>
-              Production-line trials prove the packaging runs on your equipment (e.g. aluminum can filling and seaming).
-              Suggestions come from the materials in step 3 &mdash; uncheck any you don&rsquo;t need and add your own.
+              Line trials prove the packaging runs on your production equipment. Add a step for each part of your
+              process you need to run &mdash; name it, note the line and target speed, and describe your own
+              methodology and acceptance criteria. Steps left without a name aren&rsquo;t included in the plan.
             </p>
-            {computed.lineTrialsRecommended.length === 0 && (
-              <p className="qp-hint" style={{ marginBottom: 14 }}>No suggested line trials for these materials and change type. Add a custom trial below if needed.</p>
-            )}
-            <div className="qp-tests">
-              {computed.lineTrialsRecommended.map((t) => {
-                const on = !(inputs.excludedLineTrials || []).includes(t.id);
-                const d = (inputs.lineTrialDetails || {})[t.id] || {};
-                return (
-                  <div key={t.id} className={`qp-test ${on ? "" : "is-off"}`}>
-                    <input type="checkbox" checked={on} onChange={(e) => toggleLT(t.id, e.target.checked)} aria-label={`Include ${t.name}`} />
-                    <div style={{ flex: 1 }}>
-                      <div className="qp-test__name">{t.name} <span className="qp-std">{d.line || t.line}</span></div>
-                      <div className="qp-test__why">{t.measures}</div>
-                      {on && (
-                        <div className="qp-lt-fields">
-                          <Text value={d.line ?? t.line} onChange={(v) => setLTDetail(t.id, "line", v)} placeholder="Line / equipment" />
-                          <Text value={d.speed ?? ""} onChange={(v) => setLTDetail(t.id, "speed", v)} placeholder="Target speed (e.g. 600 cans/min)" />
-                          <Text value={d.runQty ?? ""} onChange={(v) => setLTDetail(t.id, "runQty", v)} placeholder="Run size (e.g. 2 pallets, 30 min)" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            <h3 className="qp-h3">Custom line trials</h3>
-            {(inputs.customLineTrials || []).map((t, k) => (
-              <div className="qp-customlt" key={k}>
-                <Text value={t.name} onChange={(v) => setCustomLT(k, "name", v)} placeholder="Trial name" />
-                <Text value={t.line} onChange={(v) => setCustomLT(k, "line", v)} placeholder="Line / equipment" />
-                <Text value={t.speed} onChange={(v) => setCustomLT(k, "speed", v)} placeholder="Target speed" />
-                <Text value={t.runQty} onChange={(v) => setCustomLT(k, "runQty", v)} placeholder="Run size" />
-                <button type="button" className="qp-x" onClick={() => delCustomLT(k)} aria-label="Remove trial">&times;</button>
-                <Text value={t.measures} onChange={(v) => setCustomLT(k, "measures", v)} placeholder="What to measure" />
-                <Text value={t.acceptance} onChange={(v) => setCustomLT(k, "acceptance", v)} placeholder="Acceptance criteria" />
+            {computed.lineTrialSuggestions.length > 0 && (
+              <div className="qp-suggest">
+                <span className="qp-hint">Suggested from your materials (click to add, then edit):</span>
+                <div className="qp-suggest__chips">
+                  {computed.lineTrialSuggestions.map((t) => (
+                    <button type="button" key={t.id} className="qp-chipbtn" onClick={() => addLT(t)}>+ {t.name}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(inputs.lineTrials || []).map((t, k) => (
+              <div className="qp-ltstep" key={t.id}>
+                <div className="qp-ltstep__head">
+                  <span className="qp-ltstep__num">Step {k + 1}</span>
+                  <div className="qp-ltstep__tools">
+                    <button type="button" className="qp-x" onClick={() => moveLT(k, -1)} disabled={k === 0} aria-label="Move step up">&uarr;</button>
+                    <button type="button" className="qp-x" onClick={() => moveLT(k, 1)} disabled={k === inputs.lineTrials.length - 1} aria-label="Move step down">&darr;</button>
+                    <button type="button" className="qp-x" onClick={() => delLT(k)} aria-label="Remove step">&times;</button>
+                  </div>
+                </div>
+                <div className="qp-ltstep__grid">
+                  <Field label="Step / trial name" wide>
+                    <Text value={t.name} onChange={(v) => setLT(k, "name", v)} placeholder={["e.g. Filling", "e.g. Sealing / closing", "e.g. Case packing & palletizing"][k] || "e.g. Labeling"} />
+                  </Field>
+                  <Field label="Line / equipment">
+                    <Text value={t.line} onChange={(v) => setLT(k, "line", v)} placeholder="e.g. Line 3 filler" />
+                  </Field>
+                  <Field label="Target speed">
+                    <Text value={t.speed} onChange={(v) => setLT(k, "speed", v)} placeholder="e.g. 120 units/min" />
+                  </Field>
+                  <Field label="Run size">
+                    <Text value={t.runQty} onChange={(v) => setLT(k, "runQty", v)} placeholder="e.g. 2 pallets or 30 min" />
+                  </Field>
+                  <Field label="Methodology / what to measure" wide>
+                    <Area value={t.measures} onChange={(v) => setLT(k, "measures", v)} rows={3}
+                      placeholder="e.g. Line speed vs. target; jams and stoppages; reject rate; package defects; dimensional checks per spec" />
+                  </Field>
+                  <Field label="Acceptance criteria" wide>
+                    <Area value={t.acceptance} onChange={(v) => setLT(k, "acceptance", v)} rows={2}
+                      placeholder="e.g. Efficiency and reject rate no worse than current baseline; no packaging-caused stoppages" />
+                  </Field>
+                </div>
               </div>
             ))}
-            <button type="button" className="btn btn--ghost" onClick={addCustomLT}>+ Add custom line trial</button>
+            <button type="button" className="btn btn--ghost" onClick={() => addLT()}>+ Add step</button>
           </div>
         )}
 
@@ -426,7 +463,7 @@ export default function PlanWizard({ plan }) {
         <div className="qp-modal" onClick={() => setPreview(false)}>
           <div className="qp-modal__inner" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="qp-modal__close" onClick={() => setPreview(false)}>Close preview &times;</button>
-            <DocumentView doc={previewDoc} />
+            <DocumentView doc={previewDoc} branding={branding} />
           </div>
         </div>
       )}
