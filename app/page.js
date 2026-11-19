@@ -1,292 +1,451 @@
-// app/page.js — Betsel Stack home page
-// Nov 11 2026 rework. Four sections, top to bottom:
-//   1. Hero: message on the left, animated showcase on the right
-//      (Input -> Output -> 2D / 3D -> PDF Reports, swipe sideways)
-//   2. What we stand for: the four pillars
-//   3. Pricing (#pricing): 7-day trial, monthly and annual plans
-//   4. Why switch (with the TOPS Pro / Cube-IQ comparison links)
-// Pricing now lives here; /pricing stays up for links from the app.
+// app/software/page.js
+// =============================================================================
+// Replaces the ENTIRE contents of app/software/page.js.
 //
-// Uses:
-//   app/home.css, app/showcase.css
-//   components/HomeMotion.js            (RevealObserver)
-//   components/showcase/HomeShowcase.js (hero showcase)
+// BEFORE THIS WORKS:
+//   1. The demo video lives at /public/betsel-software-tour.mp4 with poster
+//      /public/betsel-software-tour-poster.jpg. The <video> below points there.
+//   2. Your existing screenshots stay where they are (/screenshots/*.jpg).
+//
+// NAV + FOOTER: this file is just the page body. Your site nav and footer come
+// from app/layout.js, so they are NOT in here — they'll still show up. If after
+// deploying you find your nav/footer disappeared, it means your OLD page.js had
+// them inline; send it over and I'll add them back. (Easy fix, low risk.)
+//
+// WHAT'S NEW: the block marked  /* NEW ... */  below — the demo video.
+// Everything else is your current page content.
+// =============================================================================
 
-import Link from "next/link";
-import "./home.css";
-import "./showcase.css";
-import HomeShowcase from "@/components/showcase/HomeShowcase";
-import { RevealObserver } from "@/components/HomeMotion";
+import { LoopVideo } from '@/components/HomeMotion';
 
 export const metadata = {
-  title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
+  title: 'Stack Software',
   description:
-    "Pallet pattern software for packaging engineers. Enter your case and pallet dimensions to generate ranked patterns in seconds, view your load in 3D, and create a professional, branded PDF report. 7-day free trial, no card. $29/month.",
+    'See the Pallet Pattern Creator in action: build a pattern, check it in 3D, load the trailer, and export a report. Try it free for 7 days.',
 };
 
-// Brand pillars, each with a simple icon that shows the idea.
-const ICONS = {
-  simplify: (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M5 30c4-14 8 6 12-6s7-10 9 0" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" opacity=".6" />
-      <path d="M26 24h16m-5-5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  time: (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M9 24a15 15 0 1 0 4.4-10.6" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-      <path d="M8 8v7h7" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M24 15v10l6 4" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  real: (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="9" y="10" width="14" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
-      <rect x="25" y="10" width="14" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
-      <rect x="9" y="23" width="30" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.6" />
-      <path d="M6 37h36M10 37v4M24 37v4M38 37v4" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-    </svg>
-  ),
-  access: (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="5" y="9" width="38" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="2.6" />
-      <path d="M5 16h38" stroke="currentColor" strokeWidth="2.6" />
-      <path d="M17 26.5l5 5 9-10" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-};
-
-const PILLARS = [
-  {
-    n: "01",
-    icon: "simplify",
-    title: "Simplify complexity",
-    body: "Enter a case and a pallet. Get ranked patterns back. Easy from day one.",
-  },
-  {
-    n: "02",
-    icon: "time",
-    title: "Give engineers their time back",
-    body: "No repetitive math, hand-drawn layouts, or spreadsheet rework.",
-  },
-  {
-    n: "03",
-    icon: "real",
-    title: "Built for real-world packaging",
-    body: "Grounded in how packaging is made, stored, and shipped.",
-  },
-  {
-    n: "04",
-    icon: "access",
-    title: "Powerful tools, made accessible",
-    body: "Runs in your browser. No bloat, no long onboarding, no enterprise price.",
-  },
-];
-
-const CORE_FEATURES = [
-  "Full Pallet Pattern Creator access",
-  "Real-time 3D load visualization",
-  "Mixed-case pallet patterns",
-  "Standard & custom pallet sizes",
-  "Custom branded PDF reports",
-];
-
-const PLANS = [
-  {
-    key: "monthly",
-    name: "Monthly",
-    price: "$29",
-    per: "/month",
-    sub: "7-day free trial – no credit card required",
-    features: [...CORE_FEATURES, "Cancel anytime"],
-    cta: "Subscribe now — $29/month",
-    fine: "Billed monthly in advance. Cancel anytime from your account page.",
-  },
-  {
-    key: "annual",
-    name: "Annual",
-    badge: "Save 20%",
-    price: "$279",
-    per: "/year",
-    sub: "$23.25/month – you save $69 a year",
-    features: [...CORE_FEATURES, "Rate locked for 12 months"],
-    cta: "Pay yearly — $279",
-    fine: "Paid in full up front and renews yearly. You can turn off renewal at any time; the prepaid year is not refundable.",
-  },
-];
-
-const NOS = [
-  ["No install.", "It runs in your browser on a Mac or a PC. Sign in anywhere and your patterns are there."],
-  ["No IT ticket.", "Nothing to download, so nothing to approve."],
-  ["No lengthy onboarding.", "If you know your case and your pallet, you already know where to start."],
-  ["No sales call.", "Start a full 7-day trial yourself. No card required."],
-];
-
-function Check() {
+export default function SoftwarePage() {
   return (
-    <span className="check" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 6 9 17l-5-5" />
-      </svg>
-    </span>
-  );
+    <div className="bs-sw">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+.bs-sw{
+  --bg:#0b0c0e;--panel:#141619;--panel-2:#1b1d21;--line:#26282c;
+  --line-amber:rgba(251,169,15,.22);
+  --amber:#fba90f;--amber-deep:#f3870a;--green:#51c16d;
+  --text:#ededee;--muted:#8d9199;--muted-2:#6b6f77;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  --disp:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);font-family:var(--body);line-height:1.6;
+}
+.bs-sw *{box-sizing:border-box}
+.bs-sw a{color:inherit;text-decoration:none}
+.bs-sw img,.bs-sw video{display:block;max-width:100%}
+.bs-sw .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.bs-sw .eyebrow{font-family:var(--mono);font-size:12px;font-weight:500;
+  letter-spacing:.3em;text-transform:uppercase;color:var(--amber)}
+
+/* hero */
+.bs-sw .hero{padding:72px 0 46px;text-align:center}
+.bs-sw .hero h1{font-family:var(--disp);font-weight:700;font-size:clamp(32px,5.5vw,54px);
+  line-height:1.04;letter-spacing:-.02em;margin:16px auto 0;max-width:16ch}
+.bs-sw .hero .lede{margin:20px auto 0;max-width:62ch;color:var(--muted);font-size:16.5px}
+.bs-sw .hero .lede + .lede{margin-top:14px}
+.bs-sw .cta-row{display:flex;gap:13px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+.bs-sw .btn{font-family:var(--mono);font-weight:500;font-size:14px;letter-spacing:.04em;
+  padding:13px 21px;border-radius:9px;cursor:pointer;transition:.18s;
+  display:inline-flex;align-items:center;gap:8px;border:1px solid transparent}
+.bs-sw .btn-primary{background:var(--amber);color:#1a1205;font-weight:700;
+  box-shadow:0 10px 30px -12px rgba(251,169,15,.6)}
+.bs-sw .btn-primary:hover{background:#ffb724;transform:translateY(-1px)}
+.bs-sw .btn-ghost{border-color:var(--line);color:var(--text);background:var(--panel)}
+.bs-sw .btn-ghost:hover{border-color:var(--muted);background:var(--panel-2)}
+
+/* looping product clip (moved here from the home page, Oct 30 2026) */
+.bs-sw .loop{padding:0 0 64px}
+.bs-sw .loop-frame{max-width:1040px;margin:0 auto;border-radius:18px;overflow:hidden;
+  border:1px solid var(--line);background:#000;
+  box-shadow:0 60px 160px -60px rgba(251,169,15,.38),0 0 0 1px rgba(251,169,15,.06)}
+.bs-sw .lv{position:relative}
+.bs-sw .lv video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#000}
+.bs-sw .lv-btn{position:absolute;right:14px;top:14px;width:36px;height:36px;display:grid;place-items:center;
+  border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(11,12,14,.62);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:var(--text);cursor:pointer;
+  opacity:.7;transition:opacity .2s,background .2s}
+.bs-sw .lv:hover .lv-btn,.bs-sw .lv-btn:focus-visible{opacity:1}
+.bs-sw .lv-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.bs-sw .loop-steps{list-style:none;margin:22px auto 0;padding:0;display:flex;flex-wrap:wrap;
+  justify-content:center;gap:8px 22px;color:var(--muted);font-size:14px}
+.bs-sw .loop-steps b{color:var(--amber);font-family:var(--mono);font-weight:700;margin-right:6px}
+@media(max-width:720px){.bs-sw .loop-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  max-width:340px;text-align:left}.bs-sw .lv-btn{right:10px;top:10px;width:32px;height:32px}}
+
+/* NEW: video showcase */
+.bs-sw .show{padding:18px 0 12px}
+.bs-sw .show .head{text-align:center;max-width:60ch;margin:0 auto}
+.bs-sw .show h2{font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.6vw,36px);
+  letter-spacing:-.015em;margin:12px 0 0}
+.bs-sw .show .head p{color:var(--muted);font-size:16px;margin:14px auto 0;max-width:54ch}
+.bs-sw .monitor{margin:30px auto 0;max-width:960px;border:1px solid var(--line);
+  border-radius:14px;overflow:hidden;background:var(--panel);
+  box-shadow:0 40px 120px -45px rgba(0,0,0,.85), 0 0 0 1px rgba(251,169,15,.06)}
+.bs-sw .chrome{display:flex;align-items:center;gap:8px;padding:11px 16px;
+  border-bottom:1px solid var(--line);background:#101214}
+.bs-sw .dot{width:11px;height:11px;border-radius:50%}
+.bs-sw .dot.r{background:#ef5f56}.bs-sw .dot.y{background:#f5bf4f}.bs-sw .dot.g{background:#62c554}
+.bs-sw .chrome .title{margin-left:10px;font-family:var(--mono);font-size:11.5px;
+  letter-spacing:.14em;color:var(--muted-2)}
+.bs-sw .monitor video{width:100%;display:block;background:#000}
+
+/* section scaffolding */
+.bs-sw .section{padding:80px 0}
+.bs-sw .sec-head{text-align:center;max-width:58ch;margin:0 auto}
+.bs-sw .sec-head h2{font-family:var(--disp);font-weight:700;font-size:clamp(26px,4vw,38px);
+  letter-spacing:-.015em;margin:12px 0 0}
+.bs-sw .sec-head p{color:var(--muted);font-size:16px;margin:14px auto 0;max-width:56ch}
+
+/* toolkit grid */
+.bs-sw .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.bs-sw .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:24px;transition:.2s}
+.bs-sw .card:hover{border-color:var(--line-amber);transform:translateY(-2px)}
+.bs-sw .card h4{font-family:var(--disp);font-weight:600;font-size:18px;margin:0}
+.bs-sw .card p{color:var(--muted);font-size:14.5px;margin:9px 0 0}
+@media(max-width:820px){.bs-sw .grid{grid-template-columns:1fr}}
+
+/* deep-dive alternating sections */
+.bs-sw .deep{display:flex;flex-direction:column;gap:26px;margin-top:46px}
+.bs-sw .dive{display:grid;grid-template-columns:1fr 1.1fr;gap:40px;align-items:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px}
+.bs-sw .dive:nth-child(even) .dive-copy{order:2}
+.bs-sw .dive:nth-child(even) .dive-media{order:1}
+.bs-sw .dive .tag{font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--amber)}
+.bs-sw .dive h3{font-family:var(--disp);font-weight:600;font-size:22px;margin:13px 0 0;
+  letter-spacing:-.01em}
+.bs-sw .dive .body{color:var(--muted);margin:12px 0 0;font-size:15.5px}
+.bs-sw .dive .why{margin:16px 0 0;padding:13px 15px;border-left:2px solid var(--amber);
+  background:rgba(251,169,15,.05);border-radius:0 8px 8px 0;font-size:14.5px}
+.bs-sw .dive .why b{color:var(--amber);font-weight:600}
+.bs-sw .dive-media{border:1px solid var(--line);border-radius:11px;overflow:hidden;
+  background:#0e0f11;min-height:160px;box-shadow:0 24px 60px -32px rgba(0,0,0,.8)}
+.bs-sw .dive-media img{width:100%;display:block}
+.bs-sw .dive.full{grid-template-columns:1fr;text-align:center}
+.bs-sw .dive.full .why{display:inline-block;text-align:left}
+@media(max-width:820px){
+  .bs-sw .dive{grid-template-columns:1fr;gap:22px;padding:24px}
+  .bs-sw .dive:nth-child(even) .dive-copy,.bs-sw .dive:nth-child(even) .dive-media{order:0}
 }
 
-export default function HomePage() {
-  return (
-    <div className="hm">
-      <RevealObserver />
+/* desktop vs mobile */
+.bs-sw .duo{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-top:44px}
+.bs-sw .ver{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px}
+.bs-sw .ver.full{border-color:var(--line-amber);
+  background:radial-gradient(500px 220px at 0% 0%, rgba(251,169,15,.09), transparent 70%),var(--panel)}
+.bs-sw .ver .badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.bs-sw .ver.full .badge{background:var(--amber);border-color:var(--amber);color:#1a1205;font-weight:700}
+.bs-sw .ver h3{font-family:var(--disp);font-weight:600;font-size:22px;margin:16px 0 0;letter-spacing:-.01em}
+.bs-sw .ver p{color:var(--muted);font-size:15px;margin:10px 0 0}
+.bs-sw .ver ul{margin:16px 0 0;padding:0;list-style:none}
+.bs-sw .ver li{position:relative;padding-left:22px;color:var(--text);font-size:14.5px;margin-top:9px}
+.bs-sw .ver li::before{content:"";position:absolute;left:2px;top:.62em;width:8px;height:8px;border-radius:2px;
+  background:var(--amber)}
+.bs-sw .ver:not(.full) li::before{background:var(--muted-2)}
+.bs-sw .duo-note{text-align:center;color:var(--muted-2);font-size:14px;margin:22px auto 0;max-width:60ch}
+@media(max-width:820px){.bs-sw .duo{grid-template-columns:1fr}}
 
-      {/* ============ HERO + SHOWCASE ============ */}
-      <section className="hm-hero hm-hero--split hm-hero--show">
-        <div className="hm-floor" aria-hidden="true" />
-        <div className="container hm-split hm-split--show">
-          <div>
-            <h1 className="hm-display rv">
-              Powerful packaging engineering.
-              <span className="hm-dim">Made practical.</span>
-            </h1>
-            <p className="hm-sub rv">
-              Betsel Stack makes pallet pattern creation simple for packaging
-              engineers. Enter your case and pallet dimensions to generate
-              ranked patterns in seconds. View your load in 3D and create a
-              professional, branded report.
+/* trial CTA */
+.bs-sw .trial{margin:18px 0 90px;border-radius:20px;border:1px solid var(--line-amber);
+  background:radial-gradient(600px 300px at 50% -20%, rgba(251,169,15,.15), transparent 70%),var(--panel);
+  text-align:center;padding:60px 28px}
+.bs-sw .trial h2{font-family:var(--disp);font-weight:700;font-size:clamp(26px,4vw,42px);
+  letter-spacing:-.02em;margin:14px 0 0}
+.bs-sw .trial p{color:var(--muted);font-size:16.5px;margin:16px auto 0;max-width:50ch}
+.bs-sw .trial .cta-row{margin-top:28px}
+        `,
+        }}
+      />
+
+      <main>
+        {/* HERO (your existing copy) */}
+        <section className="hero">
+          <div className="wrap">
+            <div className="eyebrow">Betsel Stack™</div>
+            <h1>The Pallet Pattern Creator</h1>
+            <p className="lede">
+              Powerful packaging engineering, made practical. Betsel Stack helps
+              packaging engineers create pallet patterns quickly, with layer planning,
+              3D load checks, trailer loading, and engineering reports in one focused
+              tool.
             </p>
-            <div className="hm-actions rv">
-              <Link href="/signup" className="btn btn--primary hm-btn-lg">
-                Start free trial
-              </Link>
-              <Link href="/software#watch" className="hm-textlink">
-                Watch the tour <span aria-hidden="true">&rarr;</span>
-              </Link>
+            <p className="lede">
+              Betsel Stack™ goes far beyond traditional Ti-Hi calculations. Create
+              uniform patterns from a single case size or mixed-case patterns with
+              several, use full, half, or quarter pallets or any custom footprint, and
+              plan trailer loads for 53′ reefers, 53′ dry vans, 48′ trailers, or custom
+              dimensions, without lengthy onboarding or enterprise-level complexity.
+            </p>
+            <div className="cta-row">
+              <a className="btn btn-primary" href="/signup">Start 7-day free trial →</a>
+              <a className="btn btn-ghost" href="#watch">Watch the demo</a>
             </div>
-            <p className="hm-fine rv">7 days free &middot; no credit card &middot; then $29/month</p>
           </div>
-          <div className="rv">
-            <HomeShowcase />
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ============ WHAT WE STAND FOR ============ */}
-      <section className="hm-section hm-section--tight" id="why">
-        <div className="container">
-          <div className="hm-head rv">
-            <p className="hm-tag">What we stand for</p>
-            <h2 className="hm-h2">
-              Focused by design.
-              <span className="hm-dim">Powerful where it matters.</span>
-            </h2>
-            <p className="hm-lede">
-              Packaging decisions are complex. The software you use to make them
-              shouldn&rsquo;t be.
-            </p>
+        {/* ============ LOOPING PRODUCT CLIP (moved from home page) ============ */}
+        <section className="loop" aria-label="Betsel Stack product clip">
+          <div className="wrap">
+            <div className="loop-frame">
+              <LoopVideo
+                src="/betsel-home-loop.mp4"
+                poster="/betsel-home-loop-poster.jpg"
+                label="Betsel Stack in use: size a case, generate pallet patterns, compare them in 3D, plan the truck load, and export a branded report"
+                eager
+                control
+              />
+            </div>
+            <ol className="loop-steps" aria-label="What the video shows">
+              <li><b>01</b> Size the case</li>
+              <li><b>02</b> Generate patterns</li>
+              <li><b>03</b> Compare in 3D</li>
+              <li><b>04</b> Rotate &amp; inspect</li>
+              <li><b>05</b> Plan the truck</li>
+              <li><b>06</b> Export a report</li>
+            </ol>
           </div>
-          <ul className="hm-pillars hm-pillars--left">
-            {PILLARS.map((p) => (
-              <li className="hm-pillar rv" key={p.title}>
-                <span className="hm-pillar-top">
-                  <span className="hm-pillar-icon">{ICONS[p.icon]}</span>
-                  <span className="hm-pillar-n">{p.n}</span>
-                </span>
-                <h3>{p.title}</h3>
-                <p>{p.body}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+        </section>
 
-      {/* ============ PRICING ============ */}
-      <section className="hm-section hm-section--tight hm-price" id="pricing">
-        <div className="container">
-          <div className="hm-price-top hm-price-top--solo">
-            <div className="rv">
-              <p className="hm-tag">Pricing</p>
-              <h2 className="hm-h2">
-                Try it free
-                <span className="hm-dim">for 7 days.</span>
-              </h2>
-              <p className="hm-lede">
-                Powerful tools shouldn&rsquo;t come with enterprise pricing. One
-                plan with everything included: start with a 7-day free trial
-                &mdash; no credit card required &mdash; or subscribe now and jump
-                straight in. Pay monthly, or pay for the year up front and save 20%.
+        {/* ============ NEW BLOCK 1: DEMO VIDEO ============ */}
+        <section className="show" id="watch">
+          <div className="wrap">
+            <div className="head">
+              <div className="eyebrow">See it run</div>
+              <h2>From case size to finished report</h2>
+              <p>
+                Watch a real pallet get built, checked in 3D, loaded into a trailer, and
+                exported as a report — press play for the full guided tour.
               </p>
             </div>
+            <div className="monitor">
+              <div className="chrome">
+                <span className="dot r" /><span className="dot y" /><span className="dot g" />
+                <span className="title">PALLET PATTERN BUILDER — LIVE SESSION</span>
+              </div>
+              <video
+                src="/betsel-software-tour.mp4"
+                poster="/betsel-software-tour-poster.jpg"
+                controls
+                preload="metadata"
+                playsInline
+              />
+            </div>
           </div>
+        </section>
+        {/* ============ END NEW BLOCKS ============ */}
 
-          <div className="hm-plans2">
-            {PLANS.map((p) => (
-              <div className={`price-card hm-plan2 rv${p.badge ? " hm-plan2--best" : ""}`} key={p.key}>
-                <div className="hm-plan2-head">
-                  <span className="price-badge">{p.name}</span>
-                  {p.badge && <span className="hm-plan2-save">{p.badge}</span>}
+        {/* IN THE TOOLKIT (your existing content) */}
+        <section className="section">
+          <div className="wrap">
+            <div className="sec-head">
+              <div className="eyebrow">In the toolkit</div>
+              <h2>Focused by design. Powerful where it matters.</h2>
+              <p>
+                Every tool is grounded in how packaging is actually designed,
+                manufactured, warehoused, and shipped. Nothing you won&rsquo;t use.
+              </p>
+            </div>
+            <div className="grid">
+              <div className="card"><h4>Deeper customization</h4><p>Build patterns the way your spec demands, not the way a template forces.</p></div>
+              <div className="card"><h4>Standard &amp; custom pallets</h4><p>Full 48×40, half, and quarter pallets, or any custom footprint up to oversized.</p></div>
+              <div className="card"><h4>Real-time 3D</h4><p>Inspect the load and pattern from any angle before production.</p></div>
+              <div className="card"><h4>Overhang &amp; height limits</h4><p>Set a maximum load height and see length and width overhang for every pattern.</p></div>
+              <div className="card"><h4>Case Size Calculator</h4><p>Size a case from its primary package, flute, and count, then compare it on the pallet.</p></div>
+              <div className="card"><h4>Custom reports</h4><p>Branded reports, custom-generated to meet your company&rsquo;s standards.</p></div>
+            </div>
+          </div>
+        </section>
+
+        {/* INSIDE THE SOFTWARE (your existing deep-dive) */}
+        <section className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="sec-head">
+              <div className="eyebrow">See it in action</div>
+              <h2>Inside the software</h2>
+              <p>
+                A look at the actual tools your team uses every day — from the pattern
+                engine to layer-by-layer build maps.
+              </p>
+            </div>
+
+            <div className="deep">
+              <article className="dive">
+                <div className="dive-copy">
+                  <span className="tag">Pattern Engine</span>
+                  <h3>The best pattern for your case, first</h3>
+                  <p className="body">
+                    Enter your case and pallet dimensions and Betsel Stack instantly
+                    generates ranked layouts — the most cases per layer first, each with
+                    a plain-language name, its cubic efficiency, and its unit load +
+                    pallet cube. You start from the best option, not a blank screen.
+                  </p>
+                  <div className="why">
+                    <b>Gives you time back —</b> No repetitive Ti-Hi math or manual
+                    layouts. See the most efficient, most stable pattern for your exact
+                    case in seconds.
+                  </div>
                 </div>
-                <div className="price-amount">
-                  <span className="big">{p.price}</span>
-                  <span className="per">{p.per}</span>
+                <div className="dive-media">
+                  <img src="/screenshots/builder.jpg" alt="Ranked pallet patterns with the best layout first" />
                 </div>
-                <p className="price-sub">{p.sub}</p>
-                <ul className="price-list">
-                  {p.features.map((f) => (
-                    <li key={f}>
-                      <Check />
-                      {f}
-                    </li>
-                  ))}
+              </article>
+
+              <article className="dive">
+                <div className="dive-copy">
+                  <span className="tag">Layer Planning</span>
+                  <h3>Plan every layer, down to the case</h3>
+                  <p className="body">
+                    Step through the load one layer at a time — including alternating and
+                    interlocked layers — with exact case placement, orientation, and
+                    dimensions called out.
+                  </p>
+                  <div className="why">
+                    <b>Simplifies complexity —</b> Gives your crew a clear, repeatable
+                    build map, with fewer mistakes and less rework on the floor.
+                  </div>
+                </div>
+                <div className="dive-media">
+                  <img src="/screenshots/layers-2d.jpg" alt="Plan every layer, down to the case" />
+                </div>
+              </article>
+
+              <article className="dive">
+                <div className="dive-copy">
+                  <span className="tag">Uniform &amp; Mixed Loads</span>
+                  <h3>One case size or several</h3>
+                  <p className="body">
+                    Build a uniform pallet from a single case size, or combine different
+                    case sizes on one pallet, layer by layer. Either way, see the finished
+                    unit load rendered in full 3D.
+                  </p>
+                  <div className="why">
+                    <b>Built for real-world packaging —</b> Build and document the load
+                    that actually ships, whether it&rsquo;s one SKU or several.
+                  </div>
+                </div>
+                <div className="dive-media">
+                  <img src="/screenshots/mixed-3d.jpg" alt="3D view of a pallet built from more than one case size" />
+                </div>
+              </article>
+
+              <article className="dive">
+                <div className="dive-copy">
+                  <span className="tag">Trailer Loading</span>
+                  <h3>Fill the trailer, keep it balanced</h3>
+                  <p className="body">
+                    Plan how pallets fit a 53′ reefer, 53′ dry van, 48′ trailer, or custom
+                    trailer — with
+                    live pallet counts, column-and-row layout, and a center-of-mass
+                    balance check.
+                  </p>
+                  <div className="why">
+                    <b>Built for real-world packaging —</b> Maximize every trailer and
+                    cut freight cost per unit shipped.
+                  </div>
+                </div>
+                <div className="dive-media">
+                  <img src="/screenshots/truck-load.jpg" alt="Fill the trailer, keep it balanced" />
+                </div>
+              </article>
+
+              <article className="dive full">
+                <div className="dive-copy">
+                  <span className="tag">Professional Output</span>
+                  <h3>Export custom engineering reports</h3>
+                  <p className="body">
+                    Compose a custom report from 3D renders, 2D layer diagrams, and case,
+                    pallet, and truck stats — then export a polished, branded Pallet
+                    Pattern Engineering Report with dimensions, cubic efficiency, unit load
+                    + pallet cube, weight breakdowns, and truck loading. Custom-generated to
+                    meet your company&rsquo;s standards and ready to print, email, or save.
+                  </p>
+                  <div className="why">
+                    <b>Gives you time back —</b> No retyping numbers into spreadsheets.
+                    Look professional, keep specs on file, and give every job a
+                    documented paper trail.
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        {/* DESKTOP VS MOBILE */}
+        <section className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="sec-head">
+              <div className="eyebrow">Desktop &amp; mobile</div>
+              <h2>Build at your desk. Check it on the line.</h2>
+              <p>
+                The desktop version is the full Pallet Pattern Creator. The mobile
+                version is a companion for quick looks at your pallet patterns, on
+                the go or down at the manufacturing line.
+              </p>
+            </div>
+            <div className="duo">
+              <article className="ver full">
+                <span className="badge">Full version</span>
+                <h3>Desktop</h3>
+                <p>Everything you need to engineer, document, and ship the load.</p>
+                <ul>
+                  <li>Ranked uniform and mixed-case pallet patterns</li>
+                  <li>Layer editor, 3D load view, and interlock control</li>
+                  <li>Case Size Calculator and pallet comparison</li>
+                  <li>Trailer loading with a center-of-mass check</li>
+                  <li>Branded report builder and PDF export</li>
                 </ul>
-                <Link href="/signup" className="btn btn--primary btn--block">
-                  Start 7-day free trial
-                </Link>
-                <Link href="/subscribe" className="btn btn--ghost btn--block" style={{ marginTop: 10 }}>
-                  {p.cta}
-                </Link>
-                <p className="price-fine">{p.fine}</p>
-              </div>
-            ))}
+              </article>
+              <article className="ver">
+                <span className="badge">Mobile companion</span>
+                <h3>Mobile</h3>
+                <p>Your saved work in your pocket, for quick reviews away from your desk.</p>
+                <ul>
+                  <li>Open the patterns and reports you saved to the cloud</li>
+                  <li>See the layer in 2D, or rotate the full load in 3D</li>
+                  <li>Compare column stack and interlock</li>
+                  <li>Run a quick pattern for a single case size</li>
+                </ul>
+              </article>
+            </div>
+            <p className="duo-note">
+              Both are included in every plan and run in your browser. Open the mobile
+              version on your phone from your account page; nothing to install.
+            </p>
           </div>
-          <p className="price-fine hm-price-note rv">
-            The free trial needs no card and works with either plan &mdash; pick
-            monthly or yearly when it ends. Already have an account?{" "}
-            <Link href="/login" style={{ color: "var(--amber)" }}>
-              Log in
-            </Link>
-            .
-          </p>
-        </div>
-      </section>
+        </section>
 
-      {/* ============ WHY SWITCH ============ */}
-      <section className="hm-section hm-section--tight">
-        <div className="container hm-why">
-          <div className="hm-head rv">
-            <p className="hm-tag">Why switch</p>
-            <h2 className="hm-h2">
-              Powerful tools,
-              <span className="hm-dim">without the enterprise baggage.</span>
-            </h2>
-          </div>
-          <div className="hm-nos hm-nos--2">
-            {NOS.map(([t, d]) => (
-              <div className="hm-no rv" key={t}>
-                <h3>{t}</h3>
-                <p>{d}</p>
+        {/* TRIAL CTA (your existing content) */}
+        <section className="section" style={{ padding: 0 }}>
+          <div className="wrap">
+            <div className="trial">
+              <div className="eyebrow">Get started</div>
+              <h2>Start your 7-day free trial</h2>
+              <p>
+                Full access to the Pallet Pattern Creator — no credit card, no install,
+                no onboarding call. Add a card whenever you are ready to keep going.
+              </p>
+              <div className="cta-row">
+                <a className="btn btn-primary" href="/signup">Start free trial</a>
+                <a className="btn btn-ghost" href="/pricing">See pricing</a>
               </div>
-            ))}
+            </div>
           </div>
-          <p className="hm-compare rv">
-            Coming from desktop software? See how it compares with{" "}
-            <Link href="/compare/tops-pro-alternative">TOPS Pro</Link> and{" "}
-            <Link href="/compare/cube-iq-alternative">Cube-IQ</Link>.
-          </p>
-          <div className="hm-actions hm-why-cta rv">
-            <Link href="/signup" className="btn btn--primary hm-btn-lg">
-              Start free trial
-            </Link>
-          </div>
-        </div>
-      </section>
+        </section>
+      </main>
     </div>
   );
 }
