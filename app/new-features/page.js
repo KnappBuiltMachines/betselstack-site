@@ -8,7 +8,7 @@ import "./new-features.css";
 export const metadata = {
   title: "New Features",
   description:
-    "New in Betsel Stack: Packaging Qualification Plans (Beta). Build numbered, searchable qualification plans with risk levels, test recommendations, line trials, electronic approvals and PDF export — included with your subscription.",
+    "New in Betsel Stack: Packaging Qualification Plans (Beta). Build numbered, searchable qualification plans with risk levels, test recommendations, your own line-trial steps, electronic approvals and branded PDF export — included with your subscription.",
   alternates: { canonical: "/new-features" },
 };
 
@@ -27,7 +27,7 @@ const STEPS = [
     tag: "Guided",
     title: "Answer a few questions. Get a risk level and a test plan.",
     body:
-      "A step-by-step form walks through the product, packaging materials and distribution environment. Betsel Stack scores the risk and recommends tests against recognized standards such as ASTM and ISTA, with sample sizes. Keep what fits, uncheck what doesn't, and add your own.",
+      "A step-by-step form walks through the product, packaging materials and distribution environment — pick each material from the list, or write in your own. Betsel Stack scores the risk and recommends tests against recognized standards such as ASTM and ISTA, with sample sizes. Keep what fits, uncheck what doesn't, and add your own.",
     why: "The risk score is shown factor by factor, so you can see exactly how it was reached.",
     img: "/new-features/qp-review.jpg",
     w: 1662,
@@ -38,11 +38,11 @@ const STEPS = [
     tag: "Real-world",
     title: "Line trials, not just lab tests",
     body:
-      "Qualification doesn't stop at the lab. Plans include production-line trials suggested from your materials — like running aluminum cans through the filler and seamer — with the line, target speed, run size, what to measure and how to judge it.",
+      "Qualification doesn't stop at the lab. Lay out your line trials as a list of steps that follow your own process. Name each step, note the line, target speed and run size, and write your own methodology and acceptance criteria. Add, remove or reorder steps as needed. Betsel Stack also suggests trials based on your materials, such as can filling and seaming for aluminum cans, which you can add with one click and then edit.",
     img: "/new-features/qp-line-trials.jpg",
     w: 1662,
     h: 1240,
-    alt: "Line trials step suggesting a can filling and double-seam trial, a cartoning trial and a palletizing trial",
+    alt: "Line trials step of the plan form",
   },
   {
     tag: "Approved",
@@ -66,9 +66,9 @@ const STEPS = [
   },
   {
     tag: "Ready to share",
-    title: "A complete plan document, exported to PDF",
+    title: "A complete plan document with your branding, exported to PDF",
     body:
-      "Every plan becomes a clean, numbered document: purpose, scope, background, product, packaging materials, distribution environment, risk assessment, tests, line trials, acceptance criteria, approvals, results and revision history. Export it to PDF in one click.",
+      "Every plan becomes a clean, numbered document: purpose, scope, background, product, packaging materials, distribution environment, risk assessment, tests, line trials, acceptance criteria, approvals, results and revision history. In Report settings, add your company name, logo, brand color, report title and footer text, and they appear on the document and the PDF. Export it to PDF in one click.",
     img: "/new-features/qp-document.jpg",
     w: 1662,
     h: 1390,
@@ -161,11 +161,11 @@ export default function NewFeaturesPage() {
               <li>Distribution environment</li>
               <li>Risk assessment</li>
               <li>Recommended tests &amp; sample sizes</li>
-              <li>Line trials</li>
+              <li>Line-trial steps &amp; methodology</li>
               <li>Acceptance criteria</li>
               <li>Electronic approvals</li>
               <li>Results &amp; conclusion</li>
-              <li>Revision history &amp; PDF export</li>
+              <li>Revision history &amp; branded PDF export</li>
             </ul>
           </div>
 
