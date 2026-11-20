@@ -497,8 +497,27 @@ function _distributeLayer(pls, pW, pL, tight){
 // are left untouched.
 function _distributePattern(p, pW, pL){
   if(!p||!p.placements||!p.placements.length||p.multiCaseManual||p.saved) return p;
-  const pls=_distributeLayer(p.placements,pW,pL,!!ST.tightMode);
+  const tight=!!ST.tightMode;
+  let pls=_distributeLayer(p.placements,pW,pL,tight);
   if(!pls) return p;
+  // Second pass on the TRANSPOSED layer. _distributeLayer works row-first
+  // (bands grouped by y), so a block of cases sitting beside a column of
+  // rotated cases along the X axis (e.g. a 90° end on a 48"-wide pallet)
+  // never gets its X gap closed/spread — the row pass is reverted by the
+  // tidiness guard and the column fallback only moves cases in Y.
+  // Swapping axes turns those columns into bands so the same logic applies.
+  const _T=a=>a.map(q=>({...q,x:q.y,y:q.x,w:q.l,l:q.w}));
+  const t2=_distributeLayer(_T(pls),pL,pW,tight);
+  if(t2){
+    // Keep the second pass only if it moves the layer the way the toggle
+    // asks: TIGHT never grows the footprint, SPREAD never shrinks it.
+    const span=a=>[Math.max(...a.map(q=>q.x+q.w))-Math.min(...a.map(q=>q.x)),
+                   Math.max(...a.map(q=>q.y+q.l))-Math.min(...a.map(q=>q.y))];
+    const c=_T(t2), s0=span(pls), s1=span(c);
+    const okDir=tight ? (s1[0]<=s0[0]+0.01&&s1[1]<=s0[1]+0.01)
+                      : (s1[0]>=s0[0]-0.01&&s1[1]>=s0[1]-0.01);
+    if(okDir) pls=c;
+  }
   // Alternate layer = the same spread layer turned 180° about the pallet
   // center (mirrors how the generator builds placementsB).
   const hadAlt=!!p.placementsB;
