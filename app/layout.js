@@ -10,7 +10,7 @@ export const metadata = {
     template: "%s \u2014 Betsel Stack\u2122",
   },
   description:
-    "Powerful packaging engineering, made practical. Betsel Stack is pallet pattern software that helps packaging engineers create uniform and mixed-case pallet patterns quickly, check them in 3D, plan trailer loads, and export branded reports, in your browser.",
+    "Betsel Stack is browser-based pallet pattern software for packaging engineers. Create pallet patterns fast, check them in 3D, and export branded PDF reports.",
   openGraph: {
     title: "Betsel Stack\u2122 \u2014 Powerful packaging engineering, made practical",
     description:
@@ -24,6 +24,32 @@ export const metadata = {
   },
 };
 
+// Site-wide structured data: who publishes the site and what the site is.
+// Helps Google show the brand name correctly and tie it to packaging, not
+// to the unrelated "bet"/"stack" sites it otherwise gets confused with.
+const SITE_JSONLD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.betselstack.com/#organization",
+      name: "Betsel Stack",
+      url: "https://www.betselstack.com/",
+      logo: "https://www.betselstack.com/betsel-logo.png",
+      email: "team@betselstack.com",
+      description: "Pallet pattern software for packaging engineers.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.betselstack.com/#website",
+      name: "Betsel Stack",
+      alternateName: "Betsel Stack Pallet Pattern Software",
+      url: "https://www.betselstack.com/",
+      publisher: { "@id": "https://www.betselstack.com/#organization" },
+    },
+  ],
+};
+
 export const viewport = {
   themeColor: "#0b0c0e",
   width: "device-width",
@@ -34,6 +60,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_JSONLD) }}
+        />
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />

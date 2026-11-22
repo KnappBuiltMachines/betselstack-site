@@ -1,5 +1,6 @@
 export const metadata = {
-  title: "Terms of Service — Betsel Stack",
+  title: "Terms of Service",
+  alternates: { canonical: "/terms" },
   description:
     "The terms that govern your use of the Betsel Stack pallet pattern software.",
 };

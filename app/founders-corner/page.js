@@ -8,6 +8,8 @@ export const metadata = {
   description:
     "Why I built Betsel Stack: a letter from James K, CEO & Founder, on building simple, powerful tools for packaging engineers.",
   alternates: { canonical: "/founders-corner" },
+  // Removed from the site for now (Nov 11 2026). Delete this line to bring it back.
+  robots: { index: false, follow: true },
 };
 
 export default function FoundersCornerPage() {

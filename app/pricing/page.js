@@ -1,7 +1,12 @@
 import Link from "next/link";
 import PalletMark from "@/components/PalletMark";
 
-export const metadata = { title: "Pricing" };
+export const metadata = {
+  title: "Pricing",
+  description:
+    "Betsel Stack pricing: $29/month or $279/year (save 20%). Full pallet pattern creator, 3D load view, and branded PDF reports. 7-day free trial, no card.",
+  alternates: { canonical: "/pricing" },
+};
 
 const CORE_FEATURES = [
   "Full Pallet Pattern Creator access",

@@ -22,6 +22,7 @@ export const metadata = {
   title: 'Stack Software',
   description:
     'See the Pallet Pattern Creator in action: build a pattern, check it in 3D, load the trailer, and export a report. Try it free for 7 days.',
+  alternates: { canonical: '/software' },
 };
 
 export default function SoftwarePage() {

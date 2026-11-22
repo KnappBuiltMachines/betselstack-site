@@ -1,5 +1,6 @@
 export const metadata = {
-  title: "Privacy Policy — Betsel Stack",
+  title: "Privacy Policy",
+  alternates: { canonical: "/privacy" },
   description:
     "How Betsel Stack collects, uses, and protects your information.",
 };

@@ -6,7 +6,7 @@ const SITE = "https://www.betselstack.com";
 const PATH = "/compare/tops-pro-alternative";
 
 export const metadata = {
-  title: "TOPS Pro Alternative — Browser-Based Pallet Pattern Software | Betsel Stack",
+  title: { absolute: "TOPS Pro Alternative — Browser-Based Pallet Pattern Software | Betsel Stack" },
   description:
     "Looking for a TOPS Pro alternative? Betsel Stack builds pallet patterns and reports in your browser — no install, public $29/mo pricing, and a 7-day free trial you can start now.",
   keywords: [

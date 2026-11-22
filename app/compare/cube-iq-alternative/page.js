@@ -6,7 +6,7 @@ const SITE = "https://www.betselstack.com";
 const PATH = "/compare/cube-iq-alternative";
 
 export const metadata = {
-  title: "Cube-IQ Alternative — Browser-Based Pallet Pattern Software | Betsel Stack",
+  title: { absolute: "Cube-IQ Alternative — Browser-Based Pallet Pattern Software | Betsel Stack" },
   description:
     "Looking for a Cube-IQ alternative for pallet patterns? Betsel Stack builds pallet patterns and reports in your browser — no install, public $29/mo pricing, and a 7-day free trial.",
   keywords: [

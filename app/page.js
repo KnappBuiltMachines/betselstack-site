@@ -21,7 +21,53 @@ import { RevealObserver } from "@/components/HomeMotion";
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
   description:
-    "Pallet pattern software for packaging engineers. Enter your case and pallet dimensions to generate ranked patterns in seconds, view your load in 3D, and create a professional, branded PDF report. 7-day free trial, no card. $29/month.",
+    "Pallet pattern software for packaging engineers. Generate ranked patterns in seconds, view loads in 3D, export PDF reports. 7-day free trial, $29/mo.",
+  alternates: { canonical: "/" },
+};
+
+// Product structured data (pricing shown in Google results when eligible).
+// Keep prices in step with the pricing section below and /pricing.
+const PRODUCT_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Betsel Stack Pallet Pattern Creator",
+  applicationCategory: "BusinessApplication",
+  applicationSubCategory: "Pallet pattern software",
+  operatingSystem: "Web browser",
+  url: "https://www.betselstack.com/",
+  description:
+    "Browser-based pallet pattern software for packaging engineers: enter case and pallet dimensions, get ranked uniform or mixed-case pallet patterns, view the load in 3D, and export branded PDF reports.",
+  publisher: { "@id": "https://www.betselstack.com/#organization" },
+  offers: [
+    {
+      "@type": "Offer",
+      name: "Monthly",
+      price: "29.00",
+      priceCurrency: "USD",
+      url: "https://www.betselstack.com/pricing",
+      priceSpecification: {
+        "@type": "UnitPriceSpecification",
+        price: "29.00",
+        priceCurrency: "USD",
+        billingDuration: "P1M",
+        unitText: "MONTH",
+      },
+    },
+    {
+      "@type": "Offer",
+      name: "Yearly",
+      price: "279.00",
+      priceCurrency: "USD",
+      url: "https://www.betselstack.com/pricing",
+      priceSpecification: {
+        "@type": "UnitPriceSpecification",
+        price: "279.00",
+        priceCurrency: "USD",
+        billingDuration: "P1Y",
+        unitText: "YEAR",
+      },
+    },
+  ],
 };
 
 // Brand pillars, each with a simple icon that shows the idea.
@@ -136,6 +182,10 @@ export default function HomePage() {
   return (
     <div className="hm">
       <RevealObserver />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(PRODUCT_JSONLD) }}
+      />
 
       {/* ============ HERO + SHOWCASE ============ */}
       <section className="hm-hero hm-hero--split hm-hero--show">
@@ -143,7 +193,7 @@ export default function HomePage() {
         <div className="container hm-split hm-split--show">
           <div>
             <h1 className="hm-display rv">
-              Powerful packaging engineering.
+              Powerful packaging engineering.{" "}
               <span className="hm-dim">Made practical.</span>
             </h1>
             <p className="hm-sub rv">
@@ -204,7 +254,7 @@ export default function HomePage() {
             <div className="rv">
               <p className="hm-tag">Pricing</p>
               <h2 className="hm-h2">
-                Try it free
+                Try it free{" "}
                 <span className="hm-dim">for 7 days.</span>
               </h2>
               <p className="hm-lede">
@@ -263,7 +313,7 @@ export default function HomePage() {
           <div className="hm-head rv">
             <p className="hm-tag">Why switch</p>
             <h2 className="hm-h2">
-              Powerful tools,
+              Powerful tools,{" "}
               <span className="hm-dim">without the enterprise baggage.</span>
             </h2>
           </div>

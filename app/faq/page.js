@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Pallet Pattern FAQ | Betsel Stack",
+  title: "Pallet Pattern FAQ",
   description:
     "Answers to common questions about pallet patterns, Ti-Hi, mixed-case loads, trailer cube utilization, and browser-based pallet pattern software.",
+  alternates: { canonical: "/faq" },
 };
 
 // Single source of truth: the page copy and the FAQPage schema are both
