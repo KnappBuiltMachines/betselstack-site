@@ -611,24 +611,25 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
         <div>
           <div class="st" style="margin-bottom:5px;">PRIMARY PACKAGE</div>
           <div style="display:flex;gap:4px;margin-bottom:8px;" id="csPkgBtns">
-            <button id="csPkgCuboid" onclick="csSetPkg('cuboid')" style="flex:1;background:var(--go);color:#1a1a1a;border:none;border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">▭ CUBOID</button>
-            <button id="csPkgCyl" onclick="csSetPkg('cylinder')" style="flex:1;background:#333333;color:#aaaaaa;border:1px solid var(--bd);border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">◎ CYLINDER</button>
+            <button id="csPkgCuboid" onclick="csSetPkg('cuboid')" style="flex:1;background:var(--go);color:#1a1a1a;border:none;border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">▭ BOX SHAPE<span style="display:block;font-size:9px;opacity:.75;letter-spacing:0;margin-top:1px;">cartons · trays</span></button>
+            <button id="csPkgCyl" onclick="csSetPkg('cylinder')" style="flex:1;background:#333333;color:#aaaaaa;border:1px solid var(--bd);border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;letter-spacing:.5px;">◎ CYLINDER<span style="display:block;font-size:9px;opacity:.75;letter-spacing:0;margin-top:1px;">jars · cans</span></button>
           </div>
           <!-- cuboid inputs -->
           <div id="csCuboidIn" style="display:flex;gap:6px;">
-            <div style="flex:1;"><div class="dl">L (<span class="csU"></span>)</div><input type="number" id="csPL" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
-            <div style="flex:1;"><div class="dl">W (<span class="csU"></span>)</div><input type="number" id="csPW" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
-            <div style="flex:1;"><div class="dl">H (<span class="csU"></span>)</div><input type="number" id="csPH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fdb410;margin-right:5px;vertical-align:0;"></span>L (<span class="csU"></span>)</div><input type="number" id="csPL" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5aa9ff;margin-right:5px;vertical-align:0;"></span>W (<span class="csU"></span>)</div><input type="number" id="csPW" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5ec97a;margin-right:5px;vertical-align:0;"></span>H (<span class="csU"></span>)</div><input type="number" id="csPH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
           </div>
           <!-- cylinder inputs -->
           <div id="csCylIn" style="display:none;gap:6px;">
-            <div style="flex:1;"><div class="dl">DIA (<span class="csU"></span>)</div><input type="number" id="csDia" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
-            <div style="flex:1;"><div class="dl">H (<span class="csU"></span>)</div><input type="number" id="csCylH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fdb410;margin-right:5px;vertical-align:0;"></span>DIA (<span class="csU"></span>)</div><input type="number" id="csDia" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
+            <div style="flex:1;"><div class="dl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5ec97a;margin-right:5px;vertical-align:0;"></span>H (<span class="csU"></span>)</div><input type="number" id="csCylH" min="0" step="0.0625" style="width:100%;" oninput="csGenerate()"/></div>
           </div>
           <div style="margin-top:6px;">
             <div class="dl">UNIT WEIGHT (<span class="csWU"></span>)</div>
             <input type="number" id="csUnitWt" min="0" step="0.01" style="width:100%;" oninput="csGenerate()"/>
           </div>
+          <div id="csUnitFig" style="margin-top:8px;"></div>
         </div>
         <div>
           <div class="st" style="margin-bottom:5px;">CASE PARAMETERS</div>
@@ -683,6 +684,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       </div>
       <!-- ── right: results ── -->
       <div style="flex:1;min-width:420px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;max-height:72vh;overflow:auto;">
+        <div id="csCaseFig" style="display:none;"></div>
         <div>
           <div class="st" style="margin-bottom:6px;">CASE CONFIGURATIONS <span id="csCfgCount" style="color:var(--dm);font-size:10px;letter-spacing:1px;"></span></div>
           <div id="csResults" style="font-size:12px;color:var(--dm);">Enter primary package dimensions and a case count to generate configurations.</div>
@@ -8430,6 +8432,8 @@ const CS = {
   pkgType: 'cuboid',
   results: [],          // generated case configurations
   compared: false,
+  sel: -1,              // index into results of the case being drawn
+  lastInp: null,        // last inputs read (for the case drawing)
 };
 
 // ── Carton style definitions ────────────────────────────────────────────
@@ -8534,8 +8538,11 @@ function csGenerate(){
   document.getElementById('csCompareWrap').style.display='none';
   const box = document.getElementById('csResults');
   const inp = csReadInputs();
+  CS.lastInp = inp;
+  csDrawUnit(inp);
   if(!inp.valid){
     CS.results=[];
+    CS.sel=-1; csDrawCase();
     document.getElementById('csCfgCount').textContent='';
     box.innerHTML = '<span style="color:var(--dm);font-size:12px;">Enter primary package dimensions, unit weight, and a case count to generate configurations.</span>';
     return;
@@ -8565,7 +8572,7 @@ function csGenerate(){
         const boardWt = blank/144 * csBoardLbPerFt2(inp.t);          // lbs
         const caseWt = inp.count*inp.unitWtLbs + boardWt;            // lbs
         results.push({
-          arr:`${a}×${b}×${nz}`, a, b, nz,
+          arr:`${a}×${b}×${nz}`, a, b, nz, dx, dy,
           odL:r2(od.L), odW:r2(od.W), odH:r2(od.H),
           boardWt:r2(boardWt), caseWt:r2(caseWt),
           cube:r2(od.L*od.W*od.H/1728),                              // ft³
@@ -8580,7 +8587,7 @@ function csGenerate(){
   document.getElementById('csCfgCount').textContent = `— ${results.length} option${results.length===1?'':'s'} for count ${inp.count}`;
 
   let html = `<table id="csCfgTbl" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">
-    <colgroup><col style="width:34px;"/><col style="width:104px;"/><col/><col style="width:96px;"/><col style="width:86px;"/><col style="width:76px;"/><col style="width:74px;"/></colgroup>
+    <colgroup><col style="width:30px;"/><col style="width:84px;"/><col/><col style="width:86px;"/><col style="width:76px;"/><col style="width:58px;"/><col style="width:64px;"/></colgroup>
     <thead><tr style="color:var(--go);font-size:10px;letter-spacing:1px;text-align:left;">
       <th data-nosort style="padding:4px 6px;border-bottom:1px solid var(--bd);">✓</th>
       <th style="padding:4px 6px;border-bottom:1px solid var(--bd);">ARRANGEMENT<br><span style="color:var(--dm);font-weight:normal;">L×W×LAYERS</span></th>
@@ -8591,7 +8598,7 @@ function csGenerate(){
       <th data-nosort style="padding:4px 6px;border-bottom:1px solid var(--bd);"></th>
     </tr></thead><tbody>`;
   results.forEach((r,i)=>{
-    html += `<tr style="border-bottom:1px solid #2a2a2a;">
+    html += `<tr data-i="${i}" onclick="csSelect(${i})" style="border-bottom:1px solid #2a2a2a;cursor:pointer;">
       <td style="padding:4px 6px;"><input type="checkbox" checked onchange="CS.results[${i}].include=this.checked"/></td>
       <td style="padding:4px 6px;color:#7ac8ff;" data-sv="${r.a*10000+r.b*100+r.nz}">${r.arr}</td>
       <td style="padding:4px 6px;color:var(--tx);" data-sv="${r2(r.odL*r.odW*r.odH)}">${dp(r.odL)} × ${dp(r.odW)} × ${dp(r.odH)}</td>
@@ -8604,6 +8611,154 @@ function csGenerate(){
   html += `</tbody></table>`;
   box.innerHTML = html;
   tblSetup('csCfg', document.getElementById('csCfgTbl'));
+  csSelect(0);
+}
+
+// ── Case Size Calculator drawings ───────────────────────────────────────
+// Isometric SVG of the unit (box or cylinder) with L / W / H or DIA / H
+// labeled, and of the selected case with the units arranged inside.
+// Same drawings as the free tool at betselstack.com/tools/case-size-calculator.
+// Geometry in inches; labels via dp() + u().
+const CS_DIM = { L:'#fdb410', W:'#5aa9ff', H:'#5ec97a' };
+const CS_UNITC = { top:'#5b4a1e', right:'#3f3416', front:'#4b3d19', stroke:'#f5a623' };
+const _csC = Math.cos(Math.PI/6), _csS = 0.5;
+const _csP = (x,y,z)=>[(x-y)*_csC, (x+y)*_csS - z];
+function _csFit(points, vw, vh, pad){
+  let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity;
+  points.forEach(([x,y])=>{ if(x<a)a=x; if(y<b)b=y; if(x>c)c=x; if(y>d)d=y; });
+  const bw=Math.max(c-a,1e-6), bh=Math.max(d-b,1e-6);
+  const k=Math.min((vw-2*pad)/bw,(vh-2*pad)/bh);
+  const ox=(vw-bw*k)/2, oy=(vh-bh*k)/2;
+  return { k, m:([x,y])=>[ox+(x-a)*k, oy+(y-b)*k] };
+}
+const _csPts = arr=>arr.map(p=>p[0].toFixed(2)+','+p[1].toFixed(2)).join(' ');
+function _csBoxFaces(x0,y0,z0,x1,y1,z1){
+  return {
+    top:  [_csP(x0,y0,z1),_csP(x1,y0,z1),_csP(x1,y1,z1),_csP(x0,y1,z1)],
+    right:[_csP(x1,y0,z0),_csP(x1,y1,z0),_csP(x1,y1,z1),_csP(x1,y0,z1)],
+    front:[_csP(x0,y1,z0),_csP(x1,y1,z0),_csP(x1,y1,z1),_csP(x0,y1,z1)],
+  };
+}
+function _csCyl(cx,cy,z0,z1,r){
+  const [bx,by]=_csP(cx,cy,z0), [tx,ty]=_csP(cx,cy,z1);
+  return { rx:r*Math.SQRT2*_csC, ry:r*Math.SQRT2*_csS, bx, by, tx, ty };
+}
+function _csCylSVG(bx,by,tx,ty,rx,ry,sw){
+  const d=`M${tx-rx},${ty} L${bx-rx},${by} A${rx},${ry} 0 0 0 ${bx+rx},${by} L${tx+rx},${ty} Z`;
+  return `<path d="${d}" fill="${CS_UNITC.front}" stroke="${CS_UNITC.stroke}" stroke-width="${sw}"/>`+
+         `<ellipse cx="${tx}" cy="${ty}" rx="${rx}" ry="${ry}" fill="${CS_UNITC.top}" stroke="${CS_UNITC.stroke}" stroke-width="${sw}"/>`;
+}
+function _csBoxSVG(f,m,sw){
+  return ['front','right','top'].map(s=>
+    `<polygon points="${_csPts(f[s].map(m))}" fill="${CS_UNITC[s]}" stroke="${CS_UNITC.stroke}" stroke-width="${sw}"/>`).join('');
+}
+function _csDimLabel(a,b,color,text,center,push){
+  push = push||20;
+  const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+  // Push the label straight out from its own edge (perpendicular),
+  // on the side facing away from the drawing's center.
+  const ex=b[0]-a[0], ey=b[1]-a[1], el=Math.hypot(ex,ey)||1;
+  let nx=-ey/el, ny=ex/el;
+  if(nx*(mx-center[0])+ny*(my-center[1])<0){ nx=-nx; ny=-ny; }
+  const anchor = nx>0.35?'start':nx<-0.35?'end':'middle';
+  return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`+
+    `<line x1="${mx}" y1="${my}" x2="${mx+nx*(push-9)}" y2="${my+ny*(push-9)}" stroke="${color}" stroke-width="1" opacity=".6"/>`+
+    `<text x="${mx+nx*push}" y="${my+ny*push}" fill="${color}" font-size="13" font-weight="bold" text-anchor="${anchor}" dominant-baseline="middle" font-family="'Share Tech Mono',monospace">${text}</text>`;
+}
+const _csFigBox = 'background:#141414;border:1px solid var(--bd);border-radius:6px;padding:6px 6px 8px;';
+const _csCap = t=>`<div style="text-align:center;font-size:11px;color:var(--dm);letter-spacing:.5px;">${t}</div>`;
+
+function csDrawUnit(inp){
+  const el=document.getElementById('csUnitFig');
+  if(!el) return;
+  const cyl = CS.pkgType==='cylinder';
+  const L=inp.uL, W=inp.uW, H=inp.uH;
+  const ok = cyl ? (L>0&&H>0) : (L>0&&W>0&&H>0);
+  if(!ok){
+    el.innerHTML = `<div style="${_csFigBox}min-height:110px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dm);text-align:center;">Enter the unit size to see it drawn here.</div>`;
+    return;
+  }
+  const VW=260, VH=190, PAD=38, lb=v=>dp(v)+' '+u();
+  let svg='';
+  if(cyl){
+    const r=L/2, s=_csCyl(r,r,0,H,r);
+    const {k,m}=_csFit([[s.bx-s.rx,s.by],[s.bx+s.rx,s.by+s.ry],[s.tx-s.rx,s.ty-s.ry],[s.tx+s.rx,s.ty]],VW,VH,PAD);
+    const [bx,by]=m([s.bx,s.by]), [tx,ty]=m([s.tx,s.ty]), rx=s.rx*k, ry=s.ry*k;
+    svg = _csCylSVG(bx,by,tx,ty,rx,ry,1.2)+
+      _csDimLabel([tx-rx,ty],[tx+rx,ty],CS_DIM.L,'DIA '+lb(L),[tx,ty+40],ry+18)+
+      _csDimLabel([bx+rx,by],[tx+rx,ty],CS_DIM.H,'H '+lb(H),[(bx+tx)/2,(by+ty)/2]);
+  } else {
+    const f=_csBoxFaces(0,0,0,L,W,H);
+    const {m}=_csFit([...f.top,...f.right,...f.front],VW,VH,PAD);
+    const c=m(_csP(L/2,W/2,H/2));
+    svg = _csBoxSVG(f,m,1.2)+
+      _csDimLabel(m(_csP(0,W,0)),m(_csP(L,W,0)),CS_DIM.L,'L '+lb(L),c)+
+      _csDimLabel(m(_csP(L,0,0)),m(_csP(L,W,0)),CS_DIM.W,'W '+lb(W),c)+
+      _csDimLabel(m(_csP(0,W,0)),m(_csP(0,W,H)),CS_DIM.H,'H '+lb(H),c);
+  }
+  el.innerHTML = `<div style="${_csFigBox}"><svg viewBox="0 0 ${VW} ${VH}" style="display:block;width:100%;height:auto;" role="img" aria-label="Unit drawing">${svg}</svg>${_csCap(cyl?'ONE UNIT (UPRIGHT)':'ONE UNIT (UPRIGHT · H = HEIGHT)')}</div>`;
+}
+
+function csDrawCase(){
+  const el=document.getElementById('csCaseFig');
+  if(!el) return;
+  const r = CS.results[CS.sel];
+  const inp = CS.lastInp;
+  if(!r || !inp){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  const cyl = CS.pkgType==='cylinder';
+  const VW=420, VH=250, PAD=40, lb=v=>dp(v)+' '+u();
+  const L=r.odL, W=r.odW, H=r.odH, uH=inp.uH;
+  const dx=r.dx, dy=r.dy, a=r.a, b=r.b, nz=r.nz, total=a*b*nz;
+  const x0=(L-a*dx)/2, y0=(W-b*dy)/2, z0=Math.max(0,(H-nz*uH)/2);
+  const corners=[_csP(0,0,0),_csP(L,0,0),_csP(L,W,0),_csP(0,W,0),_csP(0,0,H),_csP(L,0,H),_csP(L,W,H),_csP(0,W,H)];
+  const {k,m}=_csFit(corners,VW,VH,PAD);
+  const center=m(_csP(L/2,W/2,H/2));
+  const c=corners.map(m);
+  let units='';
+  if(total<=400){
+    const cells=[];
+    for(let z=0;z<nz;z++) for(let i=0;i<a;i++) for(let j=0;j<b;j++) cells.push([i,j,z]);
+    cells.sort((p,q)=>(p[0]+p[1])-(q[0]+q[1]) || p[2]-q[2] || p[0]-q[0]);
+    cells.forEach(([i,j,z])=>{
+      const ux=x0+i*dx, uy=y0+j*dy, uz=z0+z*uH;
+      if(cyl){
+        const rr=dx/2, s=_csCyl(ux+rr,uy+rr,uz,uz+uH,rr);
+        const [bx,by]=m([s.bx,s.by]), [tx,ty]=m([s.tx,s.ty]);
+        units += _csCylSVG(bx,by,tx,ty,s.rx*k,s.ry*k,.7);
+      } else {
+        units += _csBoxSVG(_csBoxFaces(ux,uy,uz,ux+dx,uy+dy,uz+uH),m,.7);
+      }
+    });
+  } else {
+    units = `<text x="${center[0]}" y="${center[1]}" fill="#aaaaaa" font-size="13" text-anchor="middle" font-family="'Share Tech Mono',monospace">${total} units (too many to draw)</text>`;
+  }
+  const ln=(p,q,x)=>`<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="#c7ccd2" stroke-width="1.4" ${x||''}/>`;
+  const dash='stroke-dasharray="4 4" opacity=".5"';
+  const svg =
+    `<polygon points="${_csPts([c[0],c[1],c[2],c[3]])}" fill="#181c21"/>`+
+    `<polygon points="${_csPts([c[0],c[1],c[5],c[4]])}" fill="#1f242b" opacity=".75"/>`+
+    `<polygon points="${_csPts([c[0],c[3],c[7],c[4]])}" fill="#2a3038" opacity=".55"/>`+
+    ln(c[0],c[1],dash)+ln(c[0],c[3],dash)+ln(c[0],c[4],dash)+
+    units+
+    ln(c[1],c[2])+ln(c[2],c[3])+ln(c[4],c[5])+ln(c[5],c[6])+ln(c[6],c[7])+ln(c[7],c[4])+
+    ln(c[1],c[5])+ln(c[2],c[6])+ln(c[3],c[7])+
+    _csDimLabel(c[3],c[2],CS_DIM.L,'L '+lb(L),center)+
+    _csDimLabel(c[1],c[2],CS_DIM.W,'W '+lb(W),center)+
+    _csDimLabel(c[3],c[7],CS_DIM.H,'H '+lb(H),center);
+  el.innerHTML = `<div style="${_csFigBox}"><svg viewBox="0 0 ${VW} ${VH}" style="display:block;width:100%;height:auto;max-height:260px;" role="img" aria-label="Case drawing">${svg}</svg>`+
+    _csCap(`CASE OD · ${r.arr.replace(/×/g,' × ')} = ${total} UNITS · CLICK A ROW TO DRAW IT`)+`</div>`;
+}
+
+function csSelect(i){
+  if(!CS.results[i]) return;
+  CS.sel = i;
+  document.querySelectorAll('#csCfgTbl tbody tr').forEach(tr=>{
+    const on = +tr.dataset.i===i;
+    tr.style.background = on ? 'rgba(245,166,35,.13)' : '';
+    tr.style.boxShadow  = on ? 'inset 3px 0 0 var(--go)' : '';
+  });
+  csDrawCase();
 }
 
 // ── Pallet-level comparison ─────────────────────────────────────────────
@@ -8949,7 +9104,7 @@ const TOUR_STEPS = [
   { id:'csResults', section:'CASE', kind:'click', side:'left',
     target:()=>document.getElementById('csResults'), avoid:[()=>document.querySelector('#csCompareWrap')],
     title:'Pick a case',
-    body:'Each row is a possible case: arrangement, outside size and weight. <b>COMPARE ON PALLET</b> (bottom left) shows which one fills the pallet best.',
+    body:'Each row is a possible case: arrangement, outside size and weight. Click a row to see the units drawn inside that case. <b>COMPARE ON PALLET</b> (bottom left) shows which one fills the pallet best.',
     todo:'Click a green <b>USE →</b> button to send that case to the builder.',
     done:()=>!_tourCsOpen(),
     onNext:()=>{ if(_tourCsOpen()) csClose(); },

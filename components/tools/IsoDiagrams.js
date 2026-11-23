@@ -55,11 +55,16 @@ function cylShape(cx, cy, z0, z1, r) {
 function DimLabel({ a, b, color, text, center, push = 20 }) {
   const mx = (a[0] + b[0]) / 2;
   const my = (a[1] + b[1]) / 2;
-  let nx = mx - center[0];
-  let ny = my - center[1];
-  const len = Math.hypot(nx, ny) || 1;
-  nx /= len;
-  ny /= len;
+  // Push the label straight out from its own edge (perpendicular),
+  // on the side facing away from the drawing's center.
+  const ex = b[0] - a[0], ey = b[1] - a[1];
+  const el = Math.hypot(ex, ey) || 1;
+  let nx = -ey / el;
+  let ny = ex / el;
+  if (nx * (mx - center[0]) + ny * (my - center[1]) < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
   const lx = mx + nx * push;
   const ly = my + ny * push;
   return (
