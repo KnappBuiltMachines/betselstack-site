@@ -22,6 +22,7 @@ const COLUMNS = [
   {
     title: "Resources",
     links: [
+      ["/tools/case-size-calculator", "Case size calculator"],
       ["/stack-report", "The Stack Report"],
       ["/faq", "FAQ"],
       ["/contact", "Contact"],

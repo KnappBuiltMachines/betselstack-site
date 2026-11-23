@@ -23,6 +23,8 @@ export default function sitemap() {
     { url: `${SITE}/software`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/new-features`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/pricing`,  lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE}/tools`,    lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE}/tools/case-size-calculator`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${SITE}/stack-report`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     ...posts,
     { url: `${SITE}/compare/tops-pro-alternative`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
