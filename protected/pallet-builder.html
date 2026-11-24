@@ -4,6 +4,17 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Pallet Pattern Builder</title>
+<script>
+/* Touch / scroll layout: phones and tablets (no hover, coarse pointer) get a
+   page that scrolls instead of a fixed full-screen app. Users can force it
+   on or off from View → Touch & Scroll Layout (saved per device). */
+(function(){
+  var pref=null; try{ pref=localStorage.getItem('bs_touch_layout'); }catch(e){}
+  var auto=false; try{ auto=matchMedia('(hover: none) and (pointer: coarse)').matches; }catch(e){}
+  var on = pref==='on' ? true : pref==='off' ? false : auto;
+  if(on) document.documentElement.classList.add('bs-touch');
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -156,6 +167,33 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--go);cursor:pointe
 
 /* ── vbar (view toolbar) ──────────────────────────────────────── */
 #vbar{background:var(--pn);border-bottom:2px solid var(--bd);padding:7px 12px;display:flex;gap:7px;align-items:center;flex-shrink:0;}
+/* ── Touch & scroll layout (html.bs-touch) ──────────────────────
+   The page scrolls (both ways) instead of locking to the window, so every
+   panel is reachable on phones and tablets. */
+html.bs-touch body{height:auto;min-height:100%;min-width:1100px;overflow:auto;-webkit-overflow-scrolling:touch;}
+html.bs-touch #app{flex:none;overflow:visible;min-width:1100px;}
+html.bs-touch #sb{overflow:visible;}
+html.bs-touch #main{overflow:visible;}
+html.bs-touch #caWrap{flex:none;overflow:visible;min-height:0;}
+html.bs-touch #ca{flex:none!important;height:560px!important;}
+html.bs-touch #caBelow{flex:none!important;height:auto!important;overflow:visible;min-height:200px;}
+html.bs-touch #tw{max-height:none;}
+html.bs-touch #caDragHandle{display:none;}
+html.bs-touch #menubar{position:sticky;top:0;}
+html.bs-touch #c3d{touch-action:none;}
+html.bs-touch #vbar button,html.bs-touch .mnu-sub{min-height:34px;}
+#touchTip{display:none;}
+html.bs-touch #touchTip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#1a2535;color:#cfe6ff;border-bottom:1px solid #2a4060;padding:7px 14px;font-size:12px;line-height:1.4;}
+#touchTip button{background:none;border:1px solid #2a4060;color:#7ac8ff;border-radius:3px;padding:3px 9px;font-family:inherit;font-size:12px;cursor:pointer;}
+/* Toolbar: nothing shrinks or clips; on narrow windows it wraps to a second row */
+#vbar{flex-wrap:wrap;row-gap:6px;}
+#vbar>*{flex-shrink:0;}
+#vbar button{white-space:nowrap;}
+#vbar>#selName{flex:1 1 120px;min-width:60px;flex-shrink:1;}
+#viewSeg{display:flex;border:1px solid var(--go);border-radius:4px;overflow:hidden;box-shadow:0 0 0 1px rgba(245,166,35,.15);}
+.vb-sep{width:1px;height:22px;background:var(--bd);margin:0 3px;}
+#h3d{white-space:nowrap;}
+@media (max-width:1480px){ #h3d{display:none!important;} }
 
 /* ── Canvas area ──────────────────────────────────────────────── */
 #ca{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#e8ecf0;}
@@ -256,6 +294,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="toggle3DDims();mnuClose()">Toggle 3D Dims</div>
       <div class="mnu-sub" onclick="toggle3DMaxH();mnuClose()">Toggle Max Height Plane</div>
+      <div class="mnu-sep"></div>
+      <div class="mnu-sub" onclick="touchLayoutToggle();mnuClose()">Touch &amp; Scroll Layout <span id="mnuTouchState">OFF</span></div>
     </div>
   </div>
   <!-- Tools -->
@@ -287,6 +327,12 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
   <span id="currentFile"></span>
   <!-- Hidden file input for Open -->
   <input type="file" id="kbmFileInput" accept=".kbm" style="display:none" onchange="mnuOpenFile(this)"/>
+</div>
+
+<div id="touchTip" role="note">
+  <span style="flex:1;min-width:200px;">Touch layout: scroll the page to reach every panel (scroll from outside the drawing). In 2D, one finger selects and drags cases. In 3D, drag to rotate, two fingers to pan, pinch to zoom.</span>
+  <button onclick="touchLayoutSet('off')">Use desktop layout</button>
+  <button onclick="document.getElementById('touchTip').remove()">Got it</button>
 </div>
 
 <!-- ═══ SETTINGS DIALOG ════════════════════════════════════════ -->
@@ -486,13 +532,14 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
 
 <div id="main">
   <div id="vbar">
+    <div id="viewSeg" role="tablist" aria-label="View">
+      <button id="v2d" onclick="setView('2d')" style="background:var(--go);color:#0c0e14;border:none;border-radius:0;padding:5px 14px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">2D</button>
+      <button id="v3d" onclick="setView('3d')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:5px 14px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">3D</button>
+      <button id="vtrk" onclick="setView('truck')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:5px 14px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">🚛 TRUCK</button><button id="vrpt" onclick="setView('report')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:5px 14px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">📋 REPORT</button>
+    </div>
+    <div class="vb-sep"></div>
     <button id="csBtn" onclick="csOpen()" title="Calculate case dimensions from primary package dimensions, then compare configurations at the pallet level" style="background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:4px;padding:4px 12px;letter-spacing:1px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;white-space:nowrap;margin-right:2px;">📦 CASE SIZE</button>
     <button id="rcBtn" onclick="rcOpen()" title="Check this pallet against published retailer pallet and packaging guidelines (Walmart, Target, Costco, Sam's Club, BJ's, Kroger, Meijer, Amazon, Publix)" style="background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:4px;padding:4px 12px;letter-spacing:1px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;white-space:nowrap;margin-right:2px;">🏬 RETAILERS</button>
-    <div style="display:flex;border:1px solid var(--bd);border-radius:4px;overflow:hidden;">
-      <button id="v2d" onclick="setView('2d')" style="background:var(--go);color:#0c0e14;border:none;border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">2D</button>
-      <button id="v3d" onclick="setView('3d')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">3D</button>
-      <button id="vtrk" onclick="setView('truck')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">🚛 TRUCK</button><button id="vrpt" onclick="setView('report')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">📋 REPORT</button>
-    </div>
     <span id="selName" style="font-size:13px;color:var(--go);letter-spacing:1px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     <span id="h3d" style="display:none;font-size:12px;color:var(--dm);">Drag·rotate · Scroll·zoom</span>
     <!-- Tight packing toggle — single-case, pattern views -->
@@ -524,7 +571,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
       <div id="layerStackBody" style="display:flex;flex-direction:column;gap:2px;"></div>
     </div>
     <canvas id="c2d" width="760" height="530"></canvas>
-    <canvas id="c3d"></canvas>
+    <canvas id="c3d" title="Drag to rotate · Shift+drag (or two fingers) to pan · Scroll or pinch to zoom"></canvas>
     <canvas id="ctrk2d" style="display:none;width:100%;border-radius:6px;"></canvas>
     <div id="crpt" style="display:none;width:100%;height:100%;position:absolute;top:0;left:0;overflow:hidden;"></div>
     <div id="ph"><div class="ic">▦</div><div class="ms">ENTER CASE DIMENSIONS</div><div style="font-size:12px;letter-spacing:2px;margin-top:5px;color:#aaaaaa;">PATTERNS GENERATE AUTOMATICALLY</div></div>
@@ -5380,7 +5427,7 @@ function setView(v){
   if(trkBar) trkBar.style.display = v==='truck' ? 'flex' : 'none';
   const layerBar = document.getElementById('layerEditorBar');
 
-  const base='border:none;border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:\'Share Tech Mono\',monospace;cursor:pointer;';
+  const base='border:none;border-radius:0;padding:5px 14px;letter-spacing:2px;font-size:13px;white-space:nowrap;font-family:\'Share Tech Mono\',monospace;cursor:pointer;';
   document.getElementById('v2d').style.cssText  = base+`background:${v==='2d'?'var(--go)':'#333333'};color:${v==='2d'?'#1a1a1a':'#aaaaaa'};`;
   document.getElementById('v3d').style.cssText  = base+`background:${v==='3d'?'var(--go)':'#333333'};color:${v==='3d'?'#1a1a1a':'#aaaaaa'};border-left:1px solid var(--bd);`;
   document.getElementById('vtrk').style.cssText = base+`background:${v==='truck'?'var(--go)':'#333333'};color:${v==='truck'?'#1a1a1a':'#aaaaaa'};border-left:1px solid var(--bd);`;
@@ -10108,6 +10155,101 @@ function rcToNotes(btn){
   if(typeof renderStats!=='function') return;
   const _orig = renderStats;
   renderStats = function(){ const out=_orig.apply(this, arguments); try{ rcRenderSide(); }catch(e){ console.warn('rc', e); } return out; };
+})();
+
+// ════════════════════════════════════════════════════════════════════════
+// TOUCH & SCROLL LAYOUT (phones / tablets)
+// html.bs-touch (set in <head> before first paint) makes the page scroll.
+// This block adds the View-menu toggle, finger editing on the 2D layer
+// editor, and two-finger pan / pinch zoom in 3D.
+// ════════════════════════════════════════════════════════════════════════
+function touchLayoutOn(){ return document.documentElement.classList.contains('bs-touch'); }
+function touchLayoutRefreshMenu(){
+  const el = document.getElementById('mnuTouchState');
+  if(el) el.textContent = touchLayoutOn() ? 'ON' : 'OFF';
+}
+function touchLayoutSet(v){
+  try{ localStorage.setItem('bs_touch_layout', v); }catch(e){}
+  document.documentElement.classList.toggle('bs-touch', v==='on');
+  touchLayoutRefreshMenu();
+  // Let the canvases re-measure for the new layout.
+  setTimeout(()=>window.dispatchEvent(new Event('resize')), 50);
+}
+function touchLayoutToggle(){ touchLayoutSet(touchLayoutOn() ? 'off' : 'on'); }
+touchLayoutRefreshMenu();
+
+// ── 2D layer editor: one finger acts as the mouse while a layer is in edit
+// mode. Outside edit mode, touches scroll the page as normal.
+(function(){
+  const c2 = document.getElementById('c2d');
+  if(!c2) return;
+  let active = false;
+  const fire = (type, t) => c2.dispatchEvent(new MouseEvent(type, {
+    clientX:t.clientX, clientY:t.clientY, bubbles:true, cancelable:true,
+    button:0, buttons: type==='mouseup' ? 0 : 1, view:window }));
+  const editing = () => { try{ return !LE.sideView && leIsEditing(); }catch(e){ return false; } };
+  c2.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1 || !editing()){ active=false; return; }
+    e.preventDefault();              // stop the page scrolling under the finger
+    active = true;
+    fire('mousedown', e.touches[0]);
+  }, {passive:false});
+  c2.addEventListener('touchmove', e=>{
+    if(!active) return;
+    e.preventDefault();
+    fire('mousemove', e.touches[0]);
+  }, {passive:false});
+  const end = e=>{
+    if(!active) return;
+    active = false;
+    const t = e.changedTouches && e.changedTouches[0];
+    if(t) fire('mouseup', t);
+  };
+  c2.addEventListener('touchend', end);
+  c2.addEventListener('touchcancel', end);
+})();
+
+// ── 3D view: one finger rotates (built-in pointer handlers); two fingers
+// pan, and pinching zooms (sent as wheel events to the existing zoom code).
+(function(){
+  const ca = document.getElementById('ca'), c3 = document.getElementById('c3d');
+  if(!ca || !c3) return;
+  const P = new Map();
+  let last = null;
+  const two = () => { const a=[...P.values()];
+    return {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2, d:Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y)}; };
+  ca.addEventListener('pointerdown', e=>{
+    if(e.target!==c3 || e.pointerType!=='touch') return;
+    P.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(P.size>=2){
+      e.stopImmediatePropagation();
+      last = two();
+      ORB.dn = true; ORB.panning = true; ORB.lx = last.x; ORB.ly = last.y;
+    }
+  }, true);
+  ca.addEventListener('pointermove', e=>{
+    if(e._bs || e.target!==c3 || e.pointerType!=='touch' || !P.has(e.pointerId)) return;
+    P.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(P.size<2) return;
+    e.stopImmediatePropagation();
+    const m = two();
+    ORB.dn = true; ORB.panning = true;
+    const pm = new PointerEvent('pointermove', {clientX:m.x, clientY:m.y, bubbles:true});
+    pm._bs = true;
+    c3.dispatchEvent(pm);
+    if(last && last.d>0){
+      const dd = m.d - last.d;
+      if(Math.abs(dd)>0.5) c3.dispatchEvent(new WheelEvent('wheel', {deltaY:-dd*2.5, clientX:m.x, clientY:m.y, bubbles:true, cancelable:true}));
+    }
+    last = m;
+  }, true);
+  const up = e=>{
+    if(e.pointerType!=='touch' || !P.has(e.pointerId)) return;
+    P.delete(e.pointerId);
+    if(P.size<2){ last=null; ORB.panning=false; }
+  };
+  ca.addEventListener('pointerup', up, true);
+  ca.addEventListener('pointercancel', up, true);
 })();
 
 </script>

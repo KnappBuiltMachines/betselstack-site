@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BuilderFrame from "@/components/BuilderFrame";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess } from "@/lib/subscription";
@@ -69,11 +70,7 @@ export default async function BuilderPage() {
         </div>
       )}
 
-      <iframe
-        src="/api/builder"
-        title="Pallet Pattern Creator"
-        style={{ flex: 1, width: "100%", border: 0, minHeight: 0 }}
-      />
+      <BuilderFrame src="/api/builder" title="Pallet Pattern Creator" />
     </div>
   );
 }
