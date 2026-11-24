@@ -262,6 +262,8 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
   <div class="mnu-item">
     <button class="mnu-btn" onclick="mnuToggle('mnuTools')">Tools</button>
     <div class="mnu-dropdown" id="mnuTools">
+      <div class="mnu-sub" onclick="rcOpen()">Retailer Compliance Check&hellip;</div>
+      <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="leCopyLayer();mnuClose()">Copy Layer A→B</div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="toggleUnit();mnuClose()">Toggle Units (Imperial/Metric)</div>
@@ -485,6 +487,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
 <div id="main">
   <div id="vbar">
     <button id="csBtn" onclick="csOpen()" title="Calculate case dimensions from primary package dimensions, then compare configurations at the pallet level" style="background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:4px;padding:4px 12px;letter-spacing:1px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;white-space:nowrap;margin-right:2px;">📦 CASE SIZE</button>
+    <button id="rcBtn" onclick="rcOpen()" title="Check this pallet against published retailer pallet and packaging guidelines (Walmart, Target, Costco, Sam's Club, BJ's, Kroger, Meijer, Amazon, Publix)" style="background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:4px;padding:4px 12px;letter-spacing:1px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;white-space:nowrap;margin-right:2px;">🏬 RETAILERS</button>
     <div style="display:flex;border:1px solid var(--bd);border-radius:4px;overflow:hidden;">
       <button id="v2d" onclick="setView('2d')" style="background:var(--go);color:#0c0e14;border:none;border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">2D</button>
       <button id="v3d" onclick="setView('3d')" style="background:#333333;color:#aaaaaa;border:none;border-left:1px solid var(--bd);border-radius:0;padding:4px 12px;letter-spacing:2px;font-size:13px;font-family:'Share Tech Mono',monospace;cursor:pointer;">3D</button>
@@ -9567,9 +9570,545 @@ function _tourAutoStart(){
   if(st.seen) return;
   if(window._bsReturningUser){ st.seen = true; _tourPersist(true); return; }
   if(document.getElementById('kbmOverlay').classList.contains('open') || _tourCsOpen()) return;
+  { const _rc=document.getElementById('rcOverlay'); if(_rc && _rc.classList.contains('open')) return; }
   tourStart(0);
 }
 (_settingsReady || Promise.resolve()).finally(()=> setTimeout(_tourAutoStart, 900));
+
+// ════════════════════════════════════════════════════════════════════════
+// RETAILER COMPLIANCE CHECK
+// Checks the current pallet build against publicly available retailer
+// packaging / supply-chain guidelines and lists the extra pack requirements.
+//
+// HOW TO MAINTAIN: edit RC_RETAILERS below. All limits are inches / lbs.
+//   conf: 'pub' = taken from the retailer's own published document
+//         'rep' = reported by industry sources (pallet poolers, packaging
+//                 suppliers); may be dated or category-specific
+//   hMax: number, or [passUpTo, failAbove] for conflicting / varying limits
+//         (between the two values the check shows "Verify")
+//   hIncl: true if the height limit includes the pallet
+//   wMax: number, [passUpTo, failAbove], or {gma,block,chep,plastic}
+//   ohMax: max overhang per side; uhTot: max total underhang per dimension;
+//   uhMin: min clearance (underhang) per side
+//   pallets: status per construction ('pass' | 'check' | 'fail')
+//   fp: status per footprint key ('full' 48x40, 'half', 'quarter', other)
+// Results are guidance only. Users must confirm with current retailer docs.
+// ════════════════════════════════════════════════════════════════════════
+const RC_REVIEWED = 'November 2026';
+const RC_CONSTRUCTIONS = [
+  {id:'gma',     label:'Wood stringer (GMA / CBA)'},
+  {id:'block',   label:'Wood block (9-block)'},
+  {id:'chep',    label:'Pooled block (CHEP / PECO)'},
+  {id:'plastic', label:'Plastic (iGPS / owned)'},
+];
+const RC_RETAILERS = [
+  { id:'walmart', name:'Walmart', conf:'pub',
+    src:'Walmart Supply Chain Standards – packaging guide (public Aug 2023 edition)',
+    url:'https://corporate.walmart.com/suppliers/requirements',
+    programs:[
+      { id:'dc', name:'DC freight (GM, dry grocery, perishable)', hMax:96, hIncl:true },
+      { id:'pull', name:'Full pallet pull / PDQ to store floor', hMax:85, hIncl:false },
+    ],
+    base:{ wMax:{gma:2100, block:2500, chep:2500, plastic:2500}, ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'check'},
+      fp:{full:'pass', half:'check', quarter:'check'},
+      caseMaxLb:50, caseMaxLbStatus:'check', aspectMax:1.6, caseMaxDims:[36,24,16] },
+    notes:{ w:'Grade A stringer pallet max 2,100 lb loaded; block pallets 2,800 lb, but any single pallet load over 2,500 lb is not allowed.',
+            case:'Cases to Grocery DCs may not exceed 50 lb without approval. Automation-eligible GM cases: 6.4×5×2 in to 36×24×16 in, 1–50 lb.',
+            aspect:'Packs with height/width over 1.6 are automation-ineligible.',
+            fp:'Half (48×20) and quarter (24×20) pallets are for approved programs only.' },
+    pack:[
+      'Pallet: 48×40 in (±0.25), Grade A, 4-way, flush, non-reversible. Corrugated pallets not accepted. Odd sizes not allowed in Grocery.',
+      'Pallet label: SSCC-18 in GS1-128 on at least 2 adjacent sides (upper right preferred). Pallet pulls and PDQs also carry the 14-digit orderable GTIN.',
+      'Case: orderable GTIN (ITF-14 or GS1-128) on each vendor pack; case markings on two sides.',
+      'Shrink trays: corrugated side wall at least 2 in; window cutouts no more than 50% of tray height.',
+      'Tier sheets between unsupported shrink-pack layers: solid fiber or corrugated, no overhang, at least ½ in underhang.',
+      'Stretch wrap: if hand wrapping, at least 80 gauge, 15 in wide; double-wrap bottom layer; max 10 layers; no colored/black wrap, no tails, don’t cover fork openings.',
+      'Corner boards: 100% plastic or 100% fiber, not glued or taped; not on refrigerated/frozen (except produce and eggs).',
+      'Double stacking: loads under 750 lb must support an extra 1,500 lb; over 750 lb must support an extra 2,500 lb.',
+      'Pallet pulls / PDQ: shroud matching display height (withstands 2,500 psi clamp), plastic straps only, 8½×11 placards on all four sides.',
+      'Case closure: tape at least 2 in wide and 2 mil; flap gaps no more than 1 in. Box maker’s certificate at least 200 psi burst.',
+    ]},
+  { id:'sams', name:"Sam's Club", conf:'pub',
+    src:"Sam's Club Structural Packaging Standards, Version 5 (Jan 31, 2025)",
+    url:'https://www.samsclub.com/content/supplier',
+    programs:[
+      { id:'tray', name:'In-club pallet – trays, bins, ambient (Styles B/C/D/G)', hMax:52, hIncl:true },
+      { id:'cold', name:'Cooler / freezer, pallet-driven', hMax:47.5, hIncl:true },
+    ],
+    base:{ wMax:2500, ohMax:0, uhTot:3,
+      pallets:{gma:'fail', block:'pass', chep:'pass', plastic:'pass'},
+      fp:{full:'pass', half:'check', quarter:'check'},
+      caseMaxLb:50, caseMaxLbStatus:'check', aspectMax:1.6 },
+    notes:{ pal:'Only 9-block pallets (block, CHEP, PECO, iGPS). Stringer, GMA and corrugated pallets are not allowed.',
+            case:'Max 50 lb per case including selling units (25 lb recommended). Over 50 lb needs a Team Lift label and approval.',
+            aspect:'Packs with height/width over 1.6 must ship in a full corrugated case.',
+            uh:'No overhang; underhang no more than 3 in in either direction (min footprint 45×37 in).' },
+    pack:[
+      'Shrink-wrapped corrugated trays: side wall at least 2 in (3 in for glass). Fragile glass/ceramic: at least 3 in or to the neck.',
+      'Full-layer trays with dividers: lip at least 3 in. Stacking trays: 3 in front lip recommended, max one-third of module height.',
+      'Top cap at least 4 in on domestic packouts (top and bottom caps on imports); shroud recommended. Bulk bins: caps and shroud required, 44 ECT C-flute.',
+      'Display trays at least 44 ECT; card displays at least 32 ECT E-flute.',
+      'Products must withstand double stacking; “Do Not Double Stack” labels are not allowed.',
+      'Stretch wrap required: 80 gauge, 15 in if by hand; bottom-up with double bottom wrap; max 10 layers; no colored/black wrap, netting or twine.',
+      'Labels: pallet shipping label on all shipments; PTI pallet labels on 2 adjacent sides; PTI case label top right of the short side.',
+      'Testing: ISTA 6-SAMSCLUB for in-club pallets (ISTA 6-FedEx for e-commerce) at an ISTA-certified lab ~45 days before first production.',
+    ]},
+  { id:'costco', name:'Costco', conf:'rep',
+    src:'Costco vendor packaging guidelines as summarised by pallet pooler and packaging industry sources',
+    url:'https://www.costco.com/packaging-handling-graphics.html',
+    programs:[ { id:'depot', name:'Depot / in-warehouse pallet', hMax:58, hIncl:true } ],
+    base:{ wMax:2500, ohMax:0, uhTot:3,
+      pallets:{gma:'fail', block:'pass', chep:'pass', plastic:'check'},
+      fp:{full:'pass', half:'check', quarter:'check'} },
+    notes:{ pal:'Block (general-use) or pooled pallets. Stringer pallets are not accepted as general-use pallets.',
+            h:'58 in including the 5.5 in pallet is the widely cited limit; some categories and depots set lower heights. Confirm with your buyer.' },
+    pack:[
+      'Loads under 750 lb must withstand 1,500 lb on the bottom layer; heavier loads must withstand 2,500 lb.',
+      'Pallets are designed to double-stack inbound where it improves freight efficiency.',
+      'Stretch wrap at least 3 times top to bottom.',
+      'Packaging must survive layer clamping, high humidity and long storage under load; ISTA-type transit testing is expected.',
+      'EPS is discouraged unless no practical alternative exists.',
+      'Large items (150 lb+, or 165 in+ length plus girth) must survive 2,500 psi clamping and 25 ft stacking (Costco supplier letter).',
+    ]},
+  { id:'bjs', name:"BJ's Wholesale Club", conf:'rep',
+    src:"BJ's Domestic Routing and Packaging Guide (2013 public edition) and pallet pooler summaries",
+    url:'https://www.bjs.com/',
+    programs:[ { id:'club', name:'Club pallet', hMax:[53, null], hIncl:true } ],
+    base:{ wMax:2500, ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'pass'},
+      fp:{full:'pass', half:'check', quarter:'check'} },
+    notes:{ h:'Pallet height is set by the buyer for each item. Loads up to about 53 in can be double-stacked.' },
+    pack:[
+      'Pallets 48×40, 4-way, in excellent condition (CBA hardwood, CHEP, PECO or iGPS). Other sizes need approval.',
+      'Max load 2,500 lb including the pallet.',
+      'One selling style per pallet preferred; mixed pallets labelled “MIXED STYLES” with carton counts.',
+      'Slip sheet on the top layer to enable double stacking.',
+      'Packaging must withstand forklift, pallet jack and layer clamp handling.',
+    ]},
+  { id:'target', name:'Target', conf:'rep',
+    src:'Target Vendor Routing Guide (Partners Online) as summarised by industry sources; limits vary by DC',
+    url:'https://www.partnersonline.com/',
+    programs:[ { id:'rdc', name:'RDC / FDC inbound', hMax:[60, 96], hIncl:true } ],
+    base:{ wMax:[2000, 2200], ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'check'},
+      fp:{full:'pass', half:'check', quarter:'check'},
+      caseMaxLb:50, caseMaxLbStatus:'check' },
+    notes:{ h:'Published sources cite limits from 60 in to 96 in depending on the DC. Check the routing guide for your DC.',
+            w:'Sources cite 2,000–2,200 lb gross including the pallet.',
+            case:'Cases over 50 lb need team-lift markings.' },
+    pack:[
+      'GMA-spec 48×40 pallets, damage-free; single SKU per pallet preferred.',
+      'GS1-128 carton labels with SSCC-18 on 2 adjacent sides; pallet labels must match the ASN (Pallet → Pack → Item hierarchy).',
+      'No overhang; stretch wrap and corner boards as needed for stability.',
+    ]},
+  { id:'kroger', name:'Kroger', conf:'pub',
+    src:'Kroger vendor documents: VNC program update (Dec 2024) and Case Handling Automation System spec',
+    url:'https://www.thekrogerco.com/vendors-suppliers/document-library/',
+    programs:[ { id:'dc', name:'DC freight (incl. automated DCs)', hMax:106, hIncl:true } ],
+    base:{ wMax:2755, ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'check'},
+      fp:{full:'pass', half:'check', quarter:'check'} },
+    notes:{ pal:'CHEP pallets are preferred. Non-pooled pallets must be #1 Grade A quality.',
+            h:'106 in / 2,755 lb are the limits for Kroger’s automated case-handling facilities; your buyer may set lower limits.' },
+    pack:[
+      'Pallets 48×40, 4-way. Kroger does not take part in pallet exchange.',
+      'Products to automated DCs must meet Kroger’s pallet, case and slip-sheet/tier-sheet specs; layers must keep their shape when wrap is removed.',
+      'Displays: full pallet displays max 2,500 lb; see the Kroger Display Guidelines for heights by display type.',
+    ]},
+  { id:'meijer', name:'Meijer', conf:'pub',
+    src:'Meijer Pallet, Packaging and Store Ready Display Specifications (VendorNet; Dec 2025 edition)',
+    url:'https://vendornet.meijer.com/',
+    programs:[
+      { id:'std', name:'Standard / store-ready pallet', hMax:60, hIncl:true },
+      { id:'witron', name:'Automated (Witron) DC', hMax:68, hIncl:false, uhMin:2, conf:'rep',
+        caseMaxDims:[26,20,28], caseMaxLb:70, caseMaxLbStatus:'fail' },
+    ],
+    base:{ wMax:2755, layerMaxLb:551, ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'check'},
+      fp:{full:'pass', half:'check', quarter:'check'} },
+    notes:{ fp:'Half and quarter pallets must ship on top of a full pallet.',
+            uh:'Witron buildings (2022 edition): keep at least 2 in clearance from the pallet edge on each side.',
+            case:'Witron carton limits (2022 edition): max 26×20×28 in and 70 lb.' },
+    pack:[
+      'Grade A, 4-way 48×40 pallets. No overhang.',
+      'Max layer weight 551 lb; max pallet weight 2,755 lb including the pallet.',
+      'Cartons show weight, length and height on the side; 14-digit case GTINs must be registered with Meijer.',
+      'Each pallet carries Meijer routing information.',
+    ]},
+  { id:'amazon', name:'Amazon (FBA / Vendor)', conf:'pub',
+    src:'Amazon Seller Central – requirements for LTL, FTL and FCL deliveries',
+    url:'https://sellercentral.amazon.com/help/hub/reference/external/G201967250',
+    programs:[
+      { id:'nonstack', name:'Non-stackable pallet', hMax:72, hIncl:true, wMax:1500 },
+      { id:'stack', name:'Stackable pallet', hMax:50, hIncl:true, wMax:750, conf:'rep' },
+    ],
+    base:{ ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'check', plastic:'fail'},
+      fp:{full:'pass', half:'fail', quarter:'fail'},
+      caseMaxLb:50, caseMaxLbStatus:'check', caseMaxSide:25 },
+    notes:{ pal:'Wood 40×48 pallets, GMA Grade B or better, 4-way. Grocery needs Grade 1A. Plastic pallets are reported as rejected; PECO pallets reported as not accepted.',
+            case:'Boxes max 50 lb and 25 in on any side unless they hold a single oversize item.',
+            h:'Stackable loads: up to 100 in for two pallets (about 50 in each) and 750 lb per pallet.' },
+    pack:[
+      'Every box needs its own unique FBA box ID label.',
+      'Four pallet labels, one on each side of the wrapped pallet.',
+      'All units on a pallet must belong to one shipment ID.',
+      'Single items over 100 lb, longer than 80 in or wider than 30 in go on their own pallet.',
+    ]},
+  { id:'publix', name:'Publix', conf:'rep',
+    src:'Publix supplier guidelines (Business Connection) as summarised by industry sources',
+    url:'https://corporate.publix.com/business/publix-business-connection',
+    programs:[ { id:'dc', name:'Warehouse delivery', hMax:null, hIncl:true } ],
+    base:{ ohMax:0,
+      pallets:{gma:'pass', block:'pass', chep:'pass', plastic:'pass'},
+      fp:{full:'pass', half:'check', quarter:'check'},
+      caseMaxLb:40, caseMaxLbStatus:'fail' },
+    notes:{ case:'Cases may not weigh more than 40 lb (safety requirement).',
+            h:'Height and weight limits are set in the Publix pallet policy; confirm with your buyer.' },
+    pack:[
+      'Pallets 48×40, 4-way entry. Publix does not do pallet exchange and encourages approved pallet pools.',
+      'Itemised bill of lading with every DC delivery; delivery appointments required.',
+    ]},
+];
+
+const RC = { construction:'gma', programs:{}, open:null };
+try{
+  const sv = JSON.parse(localStorage.getItem('bs_rc')||'{}');
+  if(sv.construction) RC.construction = sv.construction;
+  if(sv.programs) RC.programs = sv.programs;
+}catch(e){}
+function rcSave(){ try{ localStorage.setItem('bs_rc', JSON.stringify({construction:RC.construction, programs:RC.programs})); }catch(e){} }
+
+const rcEsc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rcLen = inches => ST.isMetric ? r2(inches*25.4)+' mm' : r2(inches)+' in';
+const rcWt  = lbs => ST.isMetric ? r2(lbs*0.453592)+' kg' : Math.round(lbs).toLocaleString()+' lb';
+
+// Current load in inches / lbs, or null if no pattern yet.
+function rcLoad(){
+  const s = ST.stats;
+  if(!s) return null;
+  const pal = PALLETS[ST.palletKey];
+  const valid = ST.cases.filter(c=>cv(c.w)>0&&cv(c.l)>0&&cv(c.h)>0);
+  if(!valid.length) return null;
+  const toLb = v => ST.isMetric ? v/0.453592 : v;
+  const isMC = !!(s.multiCaseManual || s.multiCase);
+  const HI = s.HI || s.layers || 1;
+  let totalCases = 0, caseLb = 0;
+  if(isMC){
+    const bd = getCaseBreakdown();
+    totalCases = bd.reduce((a,b)=>a+b.count,0);
+    caseLb = toLb(bd.reduce((a,b)=>a+b.totalWeight,0));
+  } else {
+    totalCases = calcTotalCases(s.TI||0, HI, s.TI_B);
+    valid.forEach(c=>{
+      const share = valid.length===1 ? 1 : (parseFloat(c.pct)||0)/100;
+      caseLb += toLb(parseFloat(c.wt)||0) * Math.round(totalCases*share);
+    });
+  }
+  const stackH = s.caseStackH_in || (cv(valid[0].h)*HI);
+  let ssH = 0; try{ ssH = getSlipSheetH()||0; }catch(e){}
+  const palLong = Math.max(pal.l,pal.w), palShort = Math.min(pal.l,pal.w);
+  const ulL = s.unitLoadL_in || palLong, ulW = s.unitLoadW_in || palShort;
+  const cases = valid.map(c=>{
+    const d=[cv(c.l),cv(c.w)].sort((a,b)=>b-a);
+    return {label:c.label||'Case', L:d[0], W:d[1], H:cv(c.h), lb:toLb(parseFloat(c.wt)||0)};
+  });
+  let fpKey = 'other';
+  const fpOf = (a,b)=>{ const L=Math.max(a,b), W=Math.min(a,b);
+    if(Math.abs(L-48)<0.3&&Math.abs(W-40)<0.3) return 'full';
+    if(Math.abs(L-48)<0.3&&Math.abs(W-20)<0.3) return 'half';
+    if(Math.abs(L-24)<0.3&&Math.abs(W-20)<0.3) return 'quarter';
+    return 'other'; };
+  fpKey = fpOf(pal.l, pal.w);
+  return {
+    palLong, palShort, palH:pal.h, fpKey,
+    stackH, totalH: pal.h + stackH + ssH,
+    gross: caseLb>0 ? caseLb + (pal.tare||50) : 0, caseLb, totalCases, HI,
+    layerLb: caseLb>0 ? caseLb/HI : 0,
+    ohL: Math.max(0,(ulL-palLong)/2), ohW: Math.max(0,(ulW-palShort)/2),
+    uhL: Math.max(0,palLong-ulL), uhW: Math.max(0,palShort-ulW),
+    cases, maxCaseLb: Math.max(0,...cases.map(c=>c.lb)),
+  };
+}
+
+function rcProgram(r){
+  const pid = RC.programs[r.id];
+  return r.programs.find(p=>p.id===pid) || r.programs[0];
+}
+function rcLimit(val, lim){ // lim: number | [pass, fail] | null
+  if(lim===null || lim===undefined) return {st:'info'};
+  if(Array.isArray(lim)){
+    const [a,b] = lim;
+    if(val<=a+1e-6) return {st:'pass'};
+    if(b===null || b===undefined) return {st:'check'};
+    return {st: val<=b+1e-6 ? 'check' : 'fail'};
+  }
+  return {st: val<=lim+1e-6 ? 'pass' : 'fail'};
+}
+const rcLimTxt = (lim, fmt) => lim===null||lim===undefined ? 'Set by buyer'
+  : Array.isArray(lim) ? (lim[1]==null ? 'Typically ≤ '+fmt(lim[0]) : fmt(lim[0])+' – '+fmt(lim[1]))
+  : '≤ '+fmt(lim);
+
+function rcEvaluate(r, L){
+  const p = rcProgram(r);
+  const R = Object.assign({}, r.base, p);
+  const conf = p.conf || r.conf;
+  const n = r.notes || {};
+  const checks = [];
+  const add = (name, st, actual, limit, note) => checks.push({name, st, actual, limit, note});
+
+  // Footprint
+  const fpSt = (R.fp && R.fp[L.fpKey]) || 'check';
+  add('Pallet footprint', fpSt, rcLen(L.palLong)+' × '+rcLen(L.palShort), '48 × 40 in', fpSt!=='pass' ? (n.fp||'Non-standard size: needs retailer approval.') : '');
+  // Pallet construction
+  const pSt = (R.pallets && R.pallets[RC.construction]) || 'check';
+  const cLabel = (RC_CONSTRUCTIONS.find(c=>c.id===RC.construction)||{}).label;
+  add('Pallet type', pSt, cLabel, '', n.pal || (pSt!=='pass' ? 'Confirm this pallet type is accepted.' : ''));
+  // Height
+  const hVal = R.hIncl ? L.totalH : L.stackH;
+  const h = rcLimit(hVal, R.hMax);
+  add('Height'+(R.hIncl?' (incl. pallet)':' (excl. pallet)'), h.st==='info'?'check':h.st, rcLen(hVal), rcLimTxt(R.hMax, rcLen), n.h||'');
+  // Weight
+  let wLim = R.wMax;
+  if(wLim && typeof wLim==='object' && !Array.isArray(wLim)) wLim = wLim[RC.construction];
+  if(L.gross>0){
+    const w = rcLimit(L.gross, wLim);
+    add('Gross weight (incl. pallet)', w.st==='info'?'check':w.st, rcWt(L.gross), rcLimTxt(wLim, rcWt), n.w||'');
+  } else {
+    add('Gross weight (incl. pallet)', 'info', 'No case weight entered', rcLimTxt(wLim, rcWt), 'Enter case weights to check weight limits.');
+  }
+  if(R.layerMaxLb && L.layerLb>0){
+    add('Layer weight', L.layerLb<=R.layerMaxLb?'pass':'fail', rcWt(L.layerLb), '≤ '+rcWt(R.layerMaxLb), '');
+  }
+  // Overhang / underhang
+  const oh = Math.max(L.ohL, L.ohW);
+  if(R.ohMax!==undefined){
+    add('Overhang', oh<=R.ohMax+0.01?'pass':'fail', oh>0.01?rcLen(oh)+' per side':'None', R.ohMax>0?'≤ '+rcLen(R.ohMax)+' per side':'None allowed', '');
+  }
+  if(R.uhTot!==undefined){
+    const uh = Math.max(L.uhL, L.uhW);
+    add('Underhang', uh<=R.uhTot+0.01?'pass':'fail', rcLen(uh)+' (largest dimension)', '≤ '+rcLen(R.uhTot)+' per dimension', n.uh||'');
+  }
+  if(R.uhMin!==undefined){
+    const minSide = Math.min(L.uhL, L.uhW)/2;
+    add('Edge clearance', minSide>=R.uhMin-0.01?'pass':'fail', rcLen(minSide)+' per side', '≥ '+rcLen(R.uhMin)+' per side', n.uh||'');
+  }
+  // Case-level
+  if(R.caseMaxLb){
+    if(L.maxCaseLb>0){
+      add('Case weight', L.maxCaseLb<=R.caseMaxLb?'pass':(R.caseMaxLbStatus||'fail'), rcWt(L.maxCaseLb)+' (heaviest)', '≤ '+rcWt(R.caseMaxLb), n.case||'');
+    } else {
+      add('Case weight', 'info', 'Not entered', '≤ '+rcWt(R.caseMaxLb), n.case||'');
+    }
+  }
+  if(R.caseMaxDims){
+    const [mL,mW,mH] = R.caseMaxDims;
+    const over = L.cases.filter(c=>c.L>mL+0.01||c.W>mW+0.01||c.H>mH+0.01);
+    add('Case size', over.length? (p.caseMaxDims?'fail':'check') : 'pass',
+      L.cases.map(c=>rcLen(c.L)+'×'+rcLen(c.W)+'×'+rcLen(c.H)).join(', '),
+      '≤ '+mL+'×'+mW+'×'+mH+' in', n.case||'');
+  }
+  if(R.caseMaxSide){
+    const big = Math.max(...L.cases.map(c=>Math.max(c.L,c.W,c.H)));
+    add('Case longest side', big<=R.caseMaxSide+0.01?'pass':'check', rcLen(big), '≤ '+rcLen(R.caseMaxSide), n.case||'');
+  }
+  if(R.aspectMax){
+    const ar = Math.max(...L.cases.map(c=>c.H/Math.max(c.W,0.01)));
+    add('Case height/width ratio', ar<=R.aspectMax+0.001?'pass':'check', r2(ar).toFixed(2), '≤ '+R.aspectMax, n.aspect||'');
+  }
+  const has = st => checks.some(c=>c.st===st);
+  const overall = has('fail') ? 'fail' : (has('check') ? 'check' : 'pass');
+  return {program:p, conf, checks, overall};
+}
+
+const RC_ST = {
+  pass:{txt:'Meets',   col:'#5ec97a', bg:'rgba(94,201,122,.12)'},
+  check:{txt:'Verify', col:'#f5a623', bg:'rgba(245,166,35,.12)'},
+  fail:{txt:'Does not meet', col:'#e85555', bg:'rgba(232,85,85,.12)'},
+  info:{txt:'Info',    col:'#aaaaaa', bg:'rgba(170,170,170,.10)'},
+};
+const RC_OVERALL = { pass:'Compliant', check:'Verify', fail:'Not compliant' };
+const rcPill = (st, txt) => `<span class="rc-pill" style="color:${RC_ST[st].col};background:${RC_ST[st].bg};border-color:${RC_ST[st].col}55;">${txt||RC_ST[st].txt}</span>`;
+
+function rcBuildDOM(){
+  if(document.getElementById('rcOverlay')) return;
+  const css = document.createElement('style');
+  css.textContent = `
+#rcOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;align-items:center;justify-content:center;}
+#rcOverlay.open{display:flex;}
+#rcDlg{background:#252525;border:1px solid var(--bd);border-top:3px solid var(--go);border-radius:6px;width:min(980px,96vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.6);}
+#rcDlg h2{font-family:'Rajdhani',sans-serif;font-size:20px;color:var(--go);letter-spacing:2px;margin:0;}
+.rc-head{padding:18px 22px 12px;border-bottom:1px solid var(--bd);}
+.rc-body{padding:14px 22px;overflow-y:auto;}
+.rc-foot{padding:12px 22px;border-top:1px solid var(--bd);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+.rc-btn{background:#333;color:var(--tx);border:1px solid var(--bd);border-radius:4px;padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:13px;cursor:pointer;}
+.rc-btn:hover{border-color:var(--go);}
+.rc-btn.go{background:var(--go);color:#111;border-color:var(--go);}
+.rc-warn{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:8px 12px;font-size:12px;line-height:1.5;color:#ddd;margin-top:10px;}
+.rc-load{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px;margin:12px 0 4px;font-size:12px;}
+.rc-load div span{display:block;color:var(--dm);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;}
+.rc-load div b{color:var(--go);}
+.rc-ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#ccc;}
+.rc-ctl select,.rc-row select{background:#333;border:1px solid var(--bd);color:var(--tx);border-radius:3px;padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:12px;}
+.rc-row{border:1px solid #3a3a3a;border-radius:5px;margin-bottom:8px;background:#2a2a2a;}
+.rc-row-h{display:flex;align-items:center;gap:12px;padding:9px 12px;cursor:pointer;flex-wrap:wrap;}
+.rc-row-h:hover{background:#2f2f2f;}
+.rc-name{font-size:14px;color:#fff;min-width:170px;font-weight:bold;}
+.rc-conf{font-size:10.5px;color:var(--dm);border:1px solid #444;border-radius:10px;padding:1px 7px;}
+.rc-sum{flex:1;font-size:11.5px;color:var(--dm);}
+.rc-pill{display:inline-block;font-size:11px;font-weight:bold;border:1px solid;border-radius:10px;padding:2px 9px;white-space:nowrap;}
+.rc-detail{padding:4px 12px 12px;border-top:1px solid #3a3a3a;}
+.rc-tbl{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 10px;}
+.rc-tbl th{text-align:left;color:var(--go);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid var(--bd);}
+.rc-tbl td{padding:5px 6px;border-bottom:1px solid #353535;vertical-align:top;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important;}
+.rc-tbl td.n{min-width:220px;}
+.rc-tbl td.n{color:#9a9a9a;font-size:11px;}
+.rc-sub{font-size:11px;color:var(--go);letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px;}
+.rc-pack{margin:0;padding-left:18px;font-size:12px;line-height:1.55;color:#ddd;}
+.rc-src{font-size:11px;color:var(--dm);margin-top:8px;}
+.rc-src a{color:#7ac8ff;}
+.rc-empty{padding:30px;text-align:center;color:var(--dm);}
+#rcSideBox{margin-top:8px;}
+#rcSideBox .rc-side-btn{width:100%;margin-top:5px;background:#1a2535;color:#7ac8ff;border:1px solid #2a4060;border-radius:3px;padding:4px 8px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;}`;
+  document.head.appendChild(css);
+  const ov = document.createElement('div');
+  ov.id = 'rcOverlay';
+  ov.innerHTML = `<div id="rcDlg" role="dialog" aria-modal="true" aria-labelledby="rcTitle">
+    <div class="rc-head">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <h2 id="rcTitle">RETAILER COMPLIANCE CHECK</h2>
+        <button class="rc-btn" onclick="rcClose()" aria-label="Close">✕</button>
+      </div>
+      <div class="rc-warn"><b style="color:var(--go);">Guidance only.</b> Based on publicly available retailer packaging and supply-chain guidelines (reviewed ${RC_REVIEWED}).
+        Requirements change and vary by category, DC and buyer. Always confirm with the retailer’s current supplier documents and your buyer before shipping.</div>
+      <div id="rcLoad"></div>
+      <div class="rc-ctl">
+        <label>Pallet type <select id="rcCons" onchange="rcSetCons(this.value)">${RC_CONSTRUCTIONS.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')}</select></label>
+        <label>Show <select id="rcFilter" onchange="rcRender()"><option value="all">All retailers</option><option value="pass">Compliant only</option><option value="issues">Issues only</option></select></label>
+      </div>
+    </div>
+    <div class="rc-body" id="rcBody"></div>
+    <div class="rc-foot">
+      <button class="rc-btn" onclick="rcToNotes(this)" title="Append a short summary to the Report Builder notes">Add summary to report notes</button>
+      <button class="rc-btn go" onclick="rcClose()">Close</button>
+    </div>
+  </div>`;
+  ov.addEventListener('click', e=>{ if(e.target===ov) rcClose(); });
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov.classList.contains('open')) rcClose(); });
+}
+
+function rcOpen(){
+  try{ mnuClose(); }catch(e){}
+  rcBuildDOM();
+  document.getElementById('rcCons').value = RC.construction;
+  document.getElementById('rcOverlay').classList.add('open');
+  rcRender();
+}
+function rcClose(){ const o=document.getElementById('rcOverlay'); if(o) o.classList.remove('open'); }
+function rcSetCons(v){ RC.construction=v; rcSave(); rcRender(); rcRenderSide(); }
+function rcSetProg(rid, pid){ RC.programs[rid]=pid; rcSave(); rcRender(); rcRenderSide(); }
+function rcToggle(rid){ RC.open = RC.open===rid ? null : rid; rcRender(); }
+
+function rcRender(){
+  const body = document.getElementById('rcBody'); if(!body) return;
+  const L = rcLoad();
+  const loadBox = document.getElementById('rcLoad');
+  if(!L){
+    loadBox.innerHTML = '';
+    body.innerHTML = '<div class="rc-empty">Enter a case and generate a pallet pattern first. The check uses the pattern you have selected.</div>';
+    return;
+  }
+  loadBox.innerHTML = `<div class="rc-load">
+    <div><span>Footprint</span><b>${rcLen(L.palLong)} × ${rcLen(L.palShort)}</b></div>
+    <div><span>Height incl. pallet</span><b>${rcLen(L.totalH)}</b></div>
+    <div><span>Gross weight</span><b>${L.gross>0?rcWt(L.gross):'—'}</b></div>
+    <div><span>Cases / layers</span><b>${L.totalCases} / ${L.HI}</b></div>
+    <div><span>Overhang</span><b>${Math.max(L.ohL,L.ohW)>0.01?rcLen(Math.max(L.ohL,L.ohW))+'/side':'None'}</b></div>
+    <div><span>Heaviest case</span><b>${L.maxCaseLb>0?rcWt(L.maxCaseLb):'—'}</b></div>
+  </div>`;
+  const filter = (document.getElementById('rcFilter')||{}).value || 'all';
+  const rows = RC_RETAILERS.map(r=>({r, ev:rcEvaluate(r,L)}))
+    .filter(x=> filter==='all' || (filter==='pass' ? x.ev.overall==='pass' : x.ev.overall!=='pass'));
+  if(!rows.length){ body.innerHTML = '<div class="rc-empty">No retailers match this filter.</div>'; return; }
+  body.innerHTML = rows.map(({r,ev})=>{
+    const isOpen = RC.open===r.id;
+    const bad = ev.checks.filter(c=>c.st==='fail').map(c=>c.name);
+    const ver = ev.checks.filter(c=>c.st==='check').map(c=>c.name);
+    const sum = bad.length ? 'Fails: '+bad.join(', ') : ver.length ? 'Verify: '+ver.join(', ') : 'Meets all listed limits';
+    const progSel = r.programs.length>1
+      ? `<select onclick="event.stopPropagation()" onchange="rcSetProg('${r.id}',this.value)">${r.programs.map(p=>`<option value="${p.id}"${p.id===ev.program.id?' selected':''}>${rcEsc(p.name)}</option>`).join('')}</select>`
+      : `<span style="font-size:11.5px;color:#ccc;">${rcEsc(ev.program.name)}</span>`;
+    return `<div class="rc-row">
+      <div class="rc-row-h" onclick="rcToggle('${r.id}')" aria-expanded="${isOpen}">
+        <span style="color:var(--dm);width:10px;">${isOpen?'▾':'▸'}</span>
+        <span class="rc-name">${rcEsc(r.name)}</span>
+        ${progSel}
+        ${rcPill(ev.overall, RC_OVERALL[ev.overall])}
+        <span class="rc-conf" title="${ev.conf==='pub'?'Limits taken from the retailer’s own published document':'Limits reported by industry sources; may be dated or category-specific'}">${ev.conf==='pub'?'Published source':'Industry-reported'}</span>
+        <span class="rc-sum">${rcEsc(sum)}</span>
+      </div>
+      ${isOpen?`<div class="rc-detail">
+        <table class="rc-tbl"><thead><tr><th>Check</th><th>Your pallet</th><th>Requirement</th><th>Result</th><th>Note</th></tr></thead><tbody>
+        ${ev.checks.map(c=>`<tr><td>${rcEsc(c.name)}</td><td>${rcEsc(c.actual)}</td><td>${rcEsc(c.limit||'—')}</td><td>${rcPill(c.st)}</td><td class="n">${rcEsc(c.note||'')}</td></tr>`).join('')}
+        </tbody></table>
+        <div class="rc-sub">Additional pack requirements</div>
+        <ul class="rc-pack">${r.pack.map(t=>`<li>${rcEsc(t)}</li>`).join('')}</ul>
+        <div class="rc-src">Source: ${rcEsc(r.src)} · <a href="${r.url}" target="_blank" rel="noopener noreferrer">Retailer supplier site</a> · Confirm current requirements with your buyer.</div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function rcSummaryCounts(){
+  const L = rcLoad(); if(!L) return null;
+  const evs = RC_RETAILERS.map(r=>({r, ev:rcEvaluate(r,L)}));
+  return {
+    pass: evs.filter(x=>x.ev.overall==='pass'),
+    check: evs.filter(x=>x.ev.overall==='check'),
+    fail: evs.filter(x=>x.ev.overall==='fail'),
+  };
+}
+
+// Compact summary under PALLET STATS in the sidebar.
+function rcRenderSide(){
+  const box = document.getElementById('statsBox'); if(!box) return;
+  rcBuildDOM();
+  let el = document.getElementById('rcSideBox');
+  if(!el){ el=document.createElement('div'); el.id='rcSideBox'; box.appendChild(el); }
+  const c = rcSummaryCounts();
+  if(!c){ el.innerHTML=''; return; }
+  const names = a => a.map(x=>x.r.name).join(', ') || '—';
+  el.innerHTML = `<div class="sr2" style="margin-top:7px;margin-bottom:2px;"><span style="font-weight:bold;font-size:9.5px;color:var(--go);letter-spacing:1px;text-transform:uppercase;">Retailer Check</span></div>
+    <div style="height:1px;background:var(--bd);margin-bottom:3px;"></div>
+    <div class="sr2"><span class="sk">Compliant</span><span class="sv" style="color:#5ec97a;text-align:right;" title="${rcEsc(names(c.pass))}">${c.pass.length}</span></div>
+    <div class="sr2"><span class="sk">Verify</span><span class="sv" style="text-align:right;" title="${rcEsc(names(c.check))}">${c.check.length}</span></div>
+    <div class="sr2"><span class="sk">Not compliant</span><span class="sv" style="color:#e85555;text-align:right;" title="${rcEsc(names(c.fail))}">${c.fail.length}</span></div>
+    <button class="rc-side-btn" onclick="rcOpen()">🏬 View retailer details</button>`;
+  const ov = document.getElementById('rcOverlay');
+  if(ov && ov.classList.contains('open')) rcRender();
+}
+
+function rcToNotes(btn){
+  const c = rcSummaryCounts(); if(!c) return;
+  const ta = document.getElementById('rptNotes'); if(!ta) return;
+  const line = list => list.map(x=>x.r.name+' ('+rcProgram(x.r).name+')').join('; ') || 'none';
+  const txt = 'Retailer check ('+new Date().toLocaleDateString()+', guidance only \u2013 confirm with retailer): '
+    + 'Compliant: '+line(c.pass)+'. Verify: '+line(c.check)+'. Not compliant: '+line(c.fail)+'.';
+  // Replace an earlier retailer summary instead of stacking copies.
+  const base = ta.value.replace(/\n?Retailer check \([^\n]*$/,'').replace(/\s+$/,'');
+  ta.value = base ? base+'\n'+txt : txt;
+  ta.dispatchEvent(new Event('input',{bubbles:true}));
+  if(btn){ const t=btn.textContent; btn.textContent='Added \u2713'; setTimeout(()=>{btn.textContent=t;},1500); }
+}
+
+// Refresh the sidebar summary whenever the stats panel re-renders.
+(function(){
+  if(typeof renderStats!=='function') return;
+  const _orig = renderStats;
+  renderStats = function(){ const out=_orig.apply(this, arguments); try{ rcRenderSide(); }catch(e){ console.warn('rc', e); } return out; };
+})();
 
 </script>
 </body>

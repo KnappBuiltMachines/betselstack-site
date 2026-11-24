@@ -8,7 +8,7 @@ import "./tools.css";
 export const metadata = {
   title: "Free Packaging Engineering Tools",
   description:
-    "Free tools for packaging engineers from Betsel Stack. Size a case from your product dimensions with the free Case Size Calculator. No login needed.",
+    "Free tools for packaging engineers from Betsel Stack: a Case Size Calculator and a Sustainable Packaging Library of materials, regulations and Green Guides claims. No login needed.",
   alternates: { canonical: "/tools" },
 };
 
@@ -19,6 +19,15 @@ const TOOLS = [
     title: "Case Size Calculator",
     text:
       "Enter your unit size (box, jar, can or bottle) and how many go in a case. Get every case arrangement with outside dimensions, weight and cube.",
+    go: "Open the calculator",
+  },
+  {
+    href: "/tools/sustainability-library",
+    tag: "Sustainability",
+    title: "Sustainable Packaging Library",
+    text:
+      "Compare packaging and pallet materials on recyclability, recycled content and reuse. Check EPR, SB 343, PFAS and PPWR status and the FTC Green Guides rules for claims.",
+    go: "Open the library",
   },
 ];
 
@@ -30,8 +39,8 @@ export default function ToolsPage() {
           <p className="eyebrow">Free tools</p>
           <h1>Free tools for packaging engineers</h1>
           <p className="lead">
-            Quick, practical calculators you can use right now, with no account and no
-            download. Built by the team behind Betsel Stack.
+            Quick, practical calculators and references you can use right now, with no
+            account and no download. Built by the team behind Betsel Stack.
           </p>
         </div>
       </section>
@@ -44,7 +53,7 @@ export default function ToolsPage() {
                 <span className="tool-card__tag">{t.tag}</span>
                 <h2>{t.title}</h2>
                 <p>{t.text}</p>
-                <span className="tool-card__go">Open the calculator &rarr;</span>
+                <span className="tool-card__go">{t.go} &rarr;</span>
               </Link>
             ))}
             <div className="tool-card tool-card--soon">

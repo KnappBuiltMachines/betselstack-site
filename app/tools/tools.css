@@ -125,3 +125,105 @@ a.tool-card:hover { border-color: var(--amber); transform: translateY(-2px); }
 @media (max-width: 420px) {
   .csc-panel { padding: 16px; }
 }
+
+/* ───────── Sustainability Library ───────── */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.sl-jump { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; padding: 0; margin: 22px 0 0; }
+.sl-jump a {
+  display: inline-block; padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); font-size: 14px; background: var(--panel);
+}
+.sl-jump a:hover { border-color: var(--amber); color: var(--text); }
+.sl-intro { max-width: 72ch; margin-bottom: 18px; }
+.sl-intro h2 { font-size: clamp(26px, 3.4vw, 34px); margin: 0 0 10px; }
+.sl-intro p { color: var(--muted); }
+
+.sl-bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+.sl-search { flex: 1 1 340px; }
+.sl-search input, .sl-sort select {
+  width: 100%; background: var(--ink-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 16px;
+}
+.sl-search input:focus, .sl-sort select:focus { outline: none; border-color: var(--amber); }
+.sl-sort { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); min-width: 190px; }
+
+.sl-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.sl-chips button {
+  background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 13px; font: inherit; font-size: 14px; cursor: pointer;
+}
+.sl-chips button span { color: var(--muted-2); margin-left: 4px; font-size: 12px; }
+.sl-chips button.is-on { background: var(--amber); border-color: var(--amber); color: #1a1205; font-weight: 600; }
+.sl-chips button.is-on span { color: #4a3505; }
+.sl-count { font-size: 14px; color: var(--muted-2); margin: 4px 0 12px; }
+
+.sl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.sl-card {
+  display: flex; flex-direction: column; gap: 12px; padding: 20px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.sl-card.is-open { border-color: rgba(253, 180, 16, .45); }
+.sl-card__head { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.sl-card__head h3 { font-size: 19px; margin: 0; }
+.sl-card__cat { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); font-weight: 600; }
+.sl-card__ex { font-size: 14px; color: var(--muted-2); margin: 0; }
+.sl-card__sum { font-size: 15px; color: var(--muted); margin: 0; }
+.sl-card__more h4 { font-size: 14px; margin: 6px 0 6px; color: var(--text); }
+.sl-card__more ul, .sl-reg ul { margin: 0 0 8px; padding-left: 18px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.sl-card__more li, .sl-reg li { margin-bottom: 4px; }
+.sl-watch li::marker { color: #ff9a6b; }
+.sl-card__foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+.sl-textbtn { background: none; border: 0; color: var(--amber); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; padding: 6px 0; }
+.sl-cmp { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); cursor: pointer; }
+.sl-cmp input { accent-color: var(--amber); width: 16px; height: 16px; }
+.sl-cmp.is-disabled { opacity: .45; cursor: not-allowed; }
+
+.sl-ratings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 0; }
+.sl-ratings div { display: flex; flex-direction: column; gap: 4px; }
+.sl-ratings dt { font-size: 12px; color: var(--muted-2); }
+.sl-ratings dd { margin: 0; }
+.sl-meter { display: inline-flex; gap: 3px; vertical-align: middle; }
+.sl-meter__seg { width: 16px; height: 7px; border-radius: 2px; background: var(--line); }
+.sl-meter__seg.is-on[data-v="1"], .sl-meter__seg.is-on[data-v="2"] { background: #e8694a; }
+.sl-meter__seg.is-on[data-v="3"] { background: var(--amber); }
+.sl-meter__seg.is-on[data-v="4"], .sl-meter__seg.is-on[data-v="5"] { background: #4fc47e; }
+.sl-num { font-size: 12px; color: var(--muted-2); margin-left: 6px; }
+
+.sl-badge {
+  display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid; white-space: nowrap; line-height: 1.4;
+}
+.sl-badge--good { color: #6fdc98; border-color: rgba(79, 196, 126, .45); background: rgba(79, 196, 126, .08); }
+.sl-badge--mid { color: var(--amber-soft); border-color: rgba(253, 180, 16, .45); background: rgba(253, 180, 16, .07); }
+.sl-badge--bad { color: #ff9a80; border-color: rgba(232, 105, 74, .5); background: rgba(232, 105, 74, .08); }
+
+.sl-legend { margin-top: 22px; display: grid; gap: 8px; font-size: 14px; color: var(--muted); max-width: 90ch; }
+.sl-legend .sl-badge { margin-right: 6px; }
+
+.sl-compare {
+  margin-bottom: 16px; padding: 16px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(253, 180, 16, .35); background: rgba(253, 180, 16, .04);
+}
+.sl-compare__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sl-compare__table th { min-width: 170px; }
+.sl-wrap { white-space: normal !important; min-width: 200px; }
+
+.sl-regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.sl-reg {
+  display: flex; flex-direction: column; gap: 10px; padding: 22px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.sl-reg__top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sl-reg h3 { font-size: 20px; margin: 0; }
+.sl-reg__status { color: var(--text); font-size: 15px; margin: 0; }
+.sl-reg .csc-textlink { margin-top: auto; }
+.sl-fine { font-size: 13.5px; color: var(--muted-2); line-height: 1.5; margin: 0; }
+.sl-fine strong { color: var(--muted); }
+.sl-claims td:first-child { white-space: nowrap; font-weight: 600; }
+.sl-sources { color: var(--muted); padding-left: 18px; margin-bottom: 14px; }
+.sl-sources a { color: var(--amber); }
+
+@media (max-width: 420px) {
+  .sl-regs { grid-template-columns: 1fr; }
+  .sl-grid { grid-template-columns: 1fr; }
+}
