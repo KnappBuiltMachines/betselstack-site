@@ -72,6 +72,24 @@ export async function POST(req) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 
+  // Added users (on someone else's subscription) already got an invite email
+  // and have no trial, so skip the trial welcome for them.
+  {
+    const admin = createAdminClient();
+    const { data: teamRow } = await admin
+      .from("team_members")
+      .select("id")
+      .eq("email", String(email).trim().toLowerCase())
+      .maybeSingle();
+    if (teamRow) {
+      await sendInternalAlert({
+        subject: `Added user joined Betsel Stack: ${email}`,
+        lines: [`<strong>${email}</strong> created their account from an added-user invite.`],
+      });
+      return NextResponse.json({ received: true, skipped: "team_member" });
+    }
+  }
+
   const start = createdAt ? new Date(createdAt).getTime() : Date.now();
   const trialEndsAt = new Date(start + TRIAL_DAYS * DAY_MS).toISOString();
 

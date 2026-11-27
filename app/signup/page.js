@@ -15,8 +15,12 @@ export default function SignupPage() {
   const [next, setNext] = useState("/account");
 
   useEffect(() => {
-    const n = new URLSearchParams(window.location.search).get("next");
+    const params = new URLSearchParams(window.location.search);
+    const n = params.get("next");
     if (n) setNext(safeNext(n, "/account"));
+    // Invite links from an added-user email carry ?email= so it's pre-filled.
+    const invited = params.get("email");
+    if (invited) setEmail(invited);
   }, []);
 
   const handleSignup = async (e) => {

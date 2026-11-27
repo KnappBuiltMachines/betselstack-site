@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, getActiveSubscription } from "@/lib/subscription";
 import BillingButtons from "@/components/BillingButtons";
+import TeamMembers from "@/components/TeamMembers";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Account" };
@@ -114,6 +115,17 @@ export default async function AccountPage() {
             <div style={{ marginTop: 14 }}>
               <BillingButtons subscribed />
             </div>
+            <TeamMembers plan={sub.plan === "annual" ? "annual" : "monthly"} />
+          </div>
+        ) : access.reason === "team" ? (
+          <div>
+            <p>Status: <strong style={amber}>Active</strong></p>
+            <p style={{ color: "var(--muted)" }}>
+              Your access is included in{" "}
+              {access.teamOwnerEmail ? <strong>{access.teamOwnerEmail}</strong> : "another member"}
+              &rsquo;s Betsel Stack subscription. There&rsquo;s nothing for you to pay.
+              Questions about your access go to the account owner.
+            </p>
           </div>
         ) : access.reason === "trial" ? (
           <div>

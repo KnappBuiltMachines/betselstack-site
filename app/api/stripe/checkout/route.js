@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getActiveSubscription } from "@/lib/subscription";
+import { getActiveSubscription, getTeamSeat } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -57,6 +57,17 @@ export async function POST(req) {
       {
         error:
           "You already have an active subscription. To switch plans or update billing, use Manage billing on your Account page.",
+      },
+      { status: 409 }
+    );
+  }
+
+  // Added users are already covered by someone else's subscription.
+  if (await getTeamSeat(user.id)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your access is already included in another member's subscription. Ask them to remove you first if you want your own plan.",
       },
       { status: 409 }
     );

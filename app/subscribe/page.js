@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveSubscription } from "@/lib/subscription";
+import { getActiveSubscription, getTeamSeat } from "@/lib/subscription";
 import BillingButtons from "@/components/BillingButtons";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,9 @@ export default async function SubscribePage() {
   // Already subscribed? Nothing to buy.
   const sub = await getActiveSubscription(supabase, user.id);
   if (sub) redirect("/account");
+
+  // Added user on someone else's subscription? Also nothing to buy.
+  if (await getTeamSeat(user.id)) redirect("/account");
 
   return (
     <section className="auth-wrap">

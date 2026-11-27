@@ -82,11 +82,28 @@ export async function GET(req) {
       .map((s) => s.user_id)
   );
 
+  // Also exclude added users on someone else's subscription.
+  const candidateEmails = candidates
+    .map((p) => (p.email || "").trim().toLowerCase())
+    .filter(Boolean);
+  let teamEmails = new Set();
+  if (candidateEmails.length) {
+    const { data: teamRows, error: teamError } = await admin
+      .from("team_members")
+      .select("email")
+      .in("email", candidateEmails);
+    if (teamError) {
+      console.error("[trial-cron] team query failed", teamError);
+      return NextResponse.json({ error: "Query failed" }, { status: 500 });
+    }
+    teamEmails = new Set((teamRows || []).map((r) => r.email));
+  }
+
   let sent = 0;
   let skipped = 0;
 
   for (const profile of candidates) {
-    if (subscribed.has(profile.id)) {
+    if (subscribed.has(profile.id) || teamEmails.has((profile.email || "").trim().toLowerCase())) {
       skipped += 1;
       continue;
     }

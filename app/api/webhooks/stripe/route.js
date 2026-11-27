@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSubscribedEmail, sendInternalAlert, firstNameOf } from "@/lib/email";
+import { splitItems, planOfSubscription } from "@/lib/team";
 
 export const runtime = "nodejs";
 
@@ -50,9 +51,13 @@ async function upsertSubscription(sub) {
     throw new Error(`could not resolve userId for subscription ${sub.id}`);
   }
 
-  const item = sub.items?.data?.[0];
+  // A subscription can now carry two lines: the base plan and an optional
+  // "Additional user" line. Read the plan from the base line, and the number
+  // of paid added users from the seat line's quantity.
+  const { baseItem: item, seatItem } = splitItems(sub);
   const priceId = item?.price?.id ?? null;
   const periodEnd = item?.current_period_end ?? sub.current_period_end ?? null;
+  const extraSeats = seatItem?.quantity ?? 0;
 
   const { error } = await admin.from("subscriptions").upsert(
     {
@@ -60,7 +65,8 @@ async function upsertSubscription(sub) {
       user_id: userId,
       status: sub.status,
       price_id: priceId,
-      plan: sub.metadata?.plan ?? null,
+      plan: sub.metadata?.plan ?? planOfSubscription(sub),
+      extra_seats: extraSeats,
       current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       cancel_at_period_end: sub.cancel_at_period_end,
       updated_at: new Date().toISOString(),
@@ -159,7 +165,7 @@ async function handleLifecycleEmail(event) {
 
     const planLabel =
       sub.metadata?.plan ??
-      sub.items?.data?.[0]?.price?.nickname ??
+      splitItems(sub).baseItem?.price?.nickname ??
       null;
 
     await sendSubscribedEmail({ to: email, firstName, planLabel });
@@ -168,7 +174,7 @@ async function handleLifecycleEmail(event) {
       subject: `New Betsel Stack subscriber: ${email}`,
       lines: [
         `<strong>${email}</strong> subscribed.`,
-        `Plan: ${planLabel || sub.items?.data?.[0]?.price?.id || "unknown"}`,
+        `Plan: ${planLabel || splitItems(sub).baseItem?.price?.id || "unknown"}`,
         `Status: ${sub.status}`,
       ],
     });
