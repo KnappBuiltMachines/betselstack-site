@@ -256,6 +256,14 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
 #caDragHandle:hover .drag-dots span,
 #caDragHandle.dragging .drag-dots span{background:var(--go);}
 #caBelow{flex:1;min-height:80px;overflow-y:auto;}
+/* Case Size Calculator: wide tables scroll sideways; USE column stays pinned */
+.csXScroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;}
+.csXScroll table{min-width:100%;}
+.csXNav{display:none;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 4px;font-size:10px;color:var(--dm);letter-spacing:1px;}
+.csXNav.on{display:flex;}
+.csXNav button{background:#1e1e1e;color:var(--go);border:1px solid var(--bd);border-radius:3px;padding:2px 10px;font-size:12px;font-family:'Share Tech Mono',monospace;cursor:pointer;}
+.csXNav button:disabled{opacity:.35;cursor:default;}
+#csCmpTbl tr>:last-child,#csCfgTbl tr>:last-child{position:sticky;right:0;z-index:2;background:#1a1a1a;box-shadow:-8px 0 8px -6px rgba(0,0,0,.7);}
 </style>
 </head>
 <body>
@@ -8661,6 +8669,7 @@ function csGenerate(){
   html += `</tbody></table>`;
   box.innerHTML = html;
   tblSetup('csCfg', document.getElementById('csCfgTbl'));
+  csXScroll(document.getElementById('csCfgTbl'));
   csSelect(0);
 }
 
@@ -8884,6 +8893,7 @@ function csRunCompare(){
   </div>`;
   document.getElementById('csCompare').innerHTML = html;
   tblSetup('csCmp', document.getElementById('csCmpTbl'));
+  csXScroll(document.getElementById('csCmpTbl'));
   document.getElementById('csCompareWrap').style.display = 'block';
   CS.compared = true;
 }
@@ -8951,6 +8961,36 @@ function tblSort(key, tableEl){
     return String(a).localeCompare(String(b)) * dir;
   });
   rows.forEach(r => tb.appendChild(r));
+}
+
+// Wraps a Case Size Calculator table in a sideways-scroll area with
+// left/right buttons that only appear when the table is wider than the pane.
+function csXScroll(tbl){
+  if(!tbl || !tbl.parentNode) return;
+  const sc = document.createElement('div');
+  sc.className = 'csXScroll';
+  tbl.parentNode.insertBefore(sc, tbl);
+  sc.appendChild(tbl);
+  const nav = document.createElement('div');
+  nav.className = 'csXNav';
+  nav.innerHTML = '<span>MORE COLUMNS</span>'
+    + '<button type="button" title="Scroll left">\u25C0</button>'
+    + '<button type="button" title="Scroll right">\u25B6</button>';
+  sc.parentNode.insertBefore(nav, sc);
+  const [, bL, bR] = nav.children;
+  const step = ()=> Math.max(120, Math.round(sc.clientWidth*0.6));
+  bL.onclick = ()=> sc.scrollBy({left:-step(), behavior:'smooth'});
+  bR.onclick = ()=> sc.scrollBy({left: step(), behavior:'smooth'});
+  const upd = ()=>{
+    const over = sc.scrollWidth > sc.clientWidth + 2;
+    nav.classList.toggle('on', over);
+    bL.disabled = sc.scrollLeft <= 1;
+    bR.disabled = sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 2;
+  };
+  sc.addEventListener('scroll', upd, {passive:true});
+  if(window.ResizeObserver){ const ro = new ResizeObserver(upd); ro.observe(sc); ro.observe(tbl); }
+  else window.addEventListener('resize', upd);
+  requestAnimationFrame(upd);
 }
 
 // Idempotent per re-render: call after (re)building a table's header + body.
