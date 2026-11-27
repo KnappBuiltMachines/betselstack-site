@@ -42,6 +42,7 @@ export async function GET(request) {
     .from("patterns")
     .select(columns)
     .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
+    .order("updated_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (error) return new NextResponse(error.message, { status: 500 });
 
@@ -126,8 +127,10 @@ export async function DELETE(request) {
   return NextResponse.json({ deleted: (data || []).map((r) => r.id) });
 }
 
-// PATCH /api/patterns  -> rename the signed-in user's saved pattern.
-//   Body: { id: <uuid>, name: <string> }. Only the caller's own row is touched.
+// PATCH /api/patterns  -> update the signed-in user's saved pattern.
+//   Body: { id: <uuid>, name?: <string>, data?: object }
+//   name only  -> rename.   data (with or without name) -> overwrite the saved
+//   project (File > Save on a cloud project). Only the caller's own row is touched.
 export async function PATCH(request) {
   const supabase = await createClient();
   const {
@@ -149,12 +152,17 @@ export async function PATCH(request) {
     typeof body?.name === "string" && body.name.trim()
       ? body.name.trim().slice(0, 120)
       : "";
+  const hasData = body && typeof body.data === "object" && body.data !== null;
   if (!id) return new NextResponse("Missing id", { status: 400 });
-  if (!name) return new NextResponse("Missing name", { status: 400 });
+  if (!name && !hasData) return new NextResponse("Missing name or data", { status: 400 });
+
+  const updates = { updated_at: new Date().toISOString() };
+  if (name) updates.name = name;
+  if (hasData) updates.data = body.data;
 
   const { data, error } = await supabase
     .from("patterns")
-    .update({ name })
+    .update(updates)
     .eq("id", id)
     .eq("user_id", user.id) // owner filter (defense-in-depth on top of RLS)
     .select("id, name, updated_at")

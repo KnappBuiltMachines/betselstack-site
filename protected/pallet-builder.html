@@ -282,12 +282,12 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
     <button class="mnu-btn" onclick="mnuToggle('mnuFile')">File</button>
     <div class="mnu-dropdown" id="mnuFile">
       <div class="mnu-sub" onclick="mnuNew()">New <span class="kbd">Ctrl+N</span></div>
-      <div class="mnu-sub" onclick="mnuOpen()">Open&hellip; <span class="kbd">Ctrl+O</span></div>
       <div class="mnu-sub" onclick="mnuOpenCloud()">Open from cloud&hellip;</div>
+      <div class="mnu-sub" onclick="mnuOpen()">Open from computer&hellip; <span class="kbd">Ctrl+O</span></div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuSave()">Save <span class="kbd">Ctrl+S</span></div>
-      <div class="mnu-sub" onclick="mnuSaveAs()">Save to computer as&hellip; <span class="kbd">Ctrl+Shift+S</span></div>
-      <div class="mnu-sub" onclick="mnuSaveCloud()">Save to cloud</div>
+      <div class="mnu-sub" onclick="mnuSaveAs()">Save As&hellip; <span class="kbd">Ctrl+Shift+S</span></div>
+      <div class="mnu-sub disabled" id="mnuRenameItem" onclick="mnuRename()">Rename&hellip;</div>
       <div class="mnu-sep"></div>
       <div class="mnu-sub" onclick="mnuExit()">Exit</div>
     </div>
@@ -362,7 +362,7 @@ tr:hover td{background:rgba(255,255,255,.04);cursor:pointer;}
         <input type="number" id="cfg_ssThick" min="0.01" step="0.01" value="0.04"/></div>
       <div class="kbm-row"><label>Default Trailer Type</label>
         <select id="cfg_trailer"><option value="53reefer">53' Reefer</option><option value="53dry">53' Dry Van</option><option value="48trailer">48' Trailer</option></select></div>
-      <div class="kbm-row"><label>Auto-save on Export</label>
+      <div class="kbm-row"><label title="When a cloud project is open, changes are saved automatically after 20 seconds without edits">Auto-save cloud projects</label>
         <select id="cfg_autoSave"><option value="0">No</option><option value="1">Yes</option></select></div>
     </div>
 
@@ -6520,18 +6520,122 @@ document.addEventListener('keydown', e=>{
 });
 
 // ── File menu actions ─────────────────────────────────────────
+// One "current project" drives everything:
+//   PROJ.where   'cloud' | 'file' | null (never saved)
+//   PROJ.name    display name (no .kbm extension)
+//   PROJ.cloudId the cloud row this project saves back to
+// Save (Ctrl+S) writes back to wherever the project came from.
+// Save As... (Ctrl+Shift+S) asks for a new name + location and saves a
+// NEW copy; the original is left untouched and the copy becomes current.
+const PROJ = { where:null, name:null, cloudId:null };
+let _kbmFileHandle = null;      // File System Access handle (Chrome/Edge)
+let _projSavedSnap = null;      // snapshot at last save/open, for the "unsaved" dot
+let _projDirty = false;
+let _projLastChange = 0;
+let _projSaving = false;
+let _projSkipUnloadWarn = false;
+
+function _projSnapshot(){
+  try{
+    const b = _buildKBM();
+    return JSON.stringify([b.project, b.state, b.truck]);
+  }catch(e){ return null; }
+}
+
+function _projLabel(){
+  const el = document.getElementById('currentFile');
+  if(!el) return;
+  if(!PROJ.name && !_projDirty){ el.textContent = ''; el.title = ''; return; }
+  const icon = PROJ.where === 'cloud' ? '☁ ' : (PROJ.where === 'file' ? '\u{1F4C4} ' : '');
+  const nm = PROJ.name || 'Untitled project';
+  el.textContent = '  ' + icon + nm + (_projDirty ? '  ● unsaved' : '');
+  el.style.color = _projDirty ? 'var(--go)' : '';
+  el.title = PROJ.where === 'cloud' ? 'Saved in your cloud account'
+           : PROJ.where === 'file'  ? 'Saved on this computer'
+           : 'Not saved yet - use File > Save As...';
+  const ren = document.getElementById('mnuRenameItem');
+  if(ren) ren.classList.toggle('disabled', !(PROJ.where === 'cloud' && PROJ.cloudId));
+}
+
+function _projMarkClean(){
+  _projSavedSnap = _projSnapshot();
+  _projDirty = false;
+  _projLabel();
+}
+
+function _projSet(where, name, cloudId){
+  PROJ.where   = where || null;
+  PROJ.name    = name ? String(name).replace(/\.kbm$/i,'') : null;
+  PROJ.cloudId = where === 'cloud' ? (cloudId || null) : null;
+  if(where !== 'file') _kbmFileHandle = null;
+  _kbmCurrentFile = PROJ.name;
+  _projMarkClean();
+}
+
+// Watch for edits (cheap: the project snapshot is small).
+setInterval(()=>{
+  if(_projSavedSnap === null) return;
+  const snap = _projSnapshot();
+  if(snap === null) return;
+  const dirty = snap !== _projSavedSnap;
+  if(dirty && snap !== _projSnapshot._last){ _projLastChange = Date.now(); }
+  _projSnapshot._last = snap;
+  if(dirty !== _projDirty){ _projDirty = dirty; _projLabel(); }
+  // Settings > Auto-save: quietly re-save cloud projects after 20s idle.
+  if(dirty && KBM_SETTINGS.autoSave && PROJ.where === 'cloud' && PROJ.cloudId
+     && !_projSaving && Date.now() - _projLastChange > 20000){
+    _projSaveCloud(PROJ.cloudId, PROJ.name, true);
+  }
+}, 1500);
+
+// Baseline after the builder finishes loading, so a fresh blank project
+// doesn't show as "unsaved".
+window.addEventListener('load', ()=> setTimeout(()=>{ if(_projSavedSnap === null) _projMarkClean(); }, 1200));
+
+window.addEventListener('beforeunload', e=>{
+  if(_projDirty && !_projSkipUnloadWarn){ e.preventDefault(); e.returnValue = ''; }
+});
+
+function _projConfirmDiscard(action){
+  if(!_projDirty) return true;
+  return confirm('You have unsaved changes' + (PROJ.name ? ' to "' + PROJ.name + '"' : '')
+    + '.\n' + action + ' anyway? Unsaved changes will be lost.');
+}
+
 function mnuNew(){
   mnuClose();
-  if(!confirm('Start a new project? Unsaved changes will be lost.')) return;
+  if(!_projConfirmDiscard('Start a new project')) return;
   // Load the builder fresh at a unique URL. A plain reload lets the browser
-  // refill the inputs with their previously typed values (form restoration),
-  // which is why a reload looked unchanged. Pointing at a new URL forces a
-  // genuinely blank start every time.
+  // refill the inputs with their previously typed values (form restoration).
+  _projSkipUnloadWarn = true;
   location.replace(location.pathname + '?new=' + Date.now());
 }
 
-function mnuOpen(){
+// ── Open from computer ──
+async function mnuOpen(){
   mnuClose();
+  if(!_projConfirmDiscard('Open another project')) return;
+  // Chrome/Edge: use the real picker so Save can write back to the same file.
+  if(window.showOpenFilePicker){
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types:[{ description:'Pallet project', accept:{ 'application/json':['.kbm'] } }]
+      });
+      const file = await handle.getFile();
+      const data = JSON.parse(await file.text());
+      _restoreKBM(data);
+      _kbmFileHandle = handle;
+      _projSet('file', file.name);
+      _showNotification('Opened "' + PROJ.name + '"', false);
+      return;
+    }catch(err){
+      if(err && err.name === 'AbortError') return;
+      if(err instanceof SyntaxError || (err && /Invalid \.kbm/.test(err.message))){
+        alert('Could not open file: ' + err.message); return;
+      }
+      // other picker problems: fall back to the plain file input
+    }
+  }
   document.getElementById('kbmFileInput').click();
 }
 
@@ -6543,8 +6647,9 @@ function mnuOpenFile(input){
     try{
       const data = JSON.parse(e.target.result);
       _restoreKBM(data);
-      _kbmCurrentFile = file.name;
-      document.getElementById('currentFile').textContent = '  📄 '+file.name;
+      _kbmFileHandle = null;
+      _projSet('file', file.name);
+      _showNotification('Opened "' + PROJ.name + '"', false);
     } catch(err){
       alert('Could not open file: ' + err.message);
     }
@@ -6553,31 +6658,33 @@ function mnuOpenFile(input){
   reader.readAsText(file);
 }
 
-function _downloadKBM(filename){
-  const data  = _buildKBM();
-  const blob  = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-  const url   = URL.createObjectURL(blob);
-  const a     = document.createElement('a');
-  a.href      = url;
-  a.download  = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+// ── Helpers ──
+function _suggestedProjName(){
+  const proj = ((document.getElementById('rptProject')||{}).value || '').trim();
+  if(proj) return proj.slice(0,120);
+  const date = new Date().toISOString().slice(0,10);
+  return 'Pallet project ' + date;
+}
+// Back-compat for any older caller.
+function _suggestedKBMName(){ return _safeFileName(_suggestedProjName()) + '.kbm'; }
+
+function _safeFileName(name){
+  return String(name || 'project').replace(/[\\\/:*?"<>|\x00-\x1f]/g,'_').trim().slice(0,100) || 'project';
 }
 
-// Remembers the exact file the user chose, so "Save" can re-write it
-// without asking again. Only set on browsers with the File System
-// Access API (Chrome, Edge); stays null on Firefox/Safari.
-let _kbmFileHandle = null;
-
-// Builds the default file name from the project name + today's date.
-function _suggestedKBMName(){
-  const proj = (document.getElementById('rptProject')||{}).value || 'project';
-  const safe = proj.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40) || 'project';
-  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  return safe + '_' + date + '.kbm';
+function _cloudBundle(){
+  const bundle = _buildKBM();
+  // Keep cloud rows lean: a per-user logo doesn't belong in every pattern.
+  if(bundle.settings) bundle.settings.logoDataUrl = null;
+  return bundle;
 }
 
-// Makes sure we still have permission to write back to a chosen file.
+function _cloudErr(res, txt){
+  if(res.status === 401) return 'Please sign in again to save to cloud';
+  if(res.status === 403) return 'Cloud save needs an active account';
+  return 'Cloud save failed: ' + (txt || ('HTTP ' + res.status));
+}
+
 async function _verifyHandlePermission(handle){
   if(!handle || typeof handle.queryPermission !== 'function') return true;
   const opts = { mode: 'readwrite' };
@@ -6588,108 +6695,231 @@ async function _verifyHandlePermission(handle){
   return false;
 }
 
-// Opens a real "choose where to save" dialog (Chrome/Edge). On browsers
-// without the picker, falls back to a normal download. Returns false if
-// the user cancels the dialog, true if a file was written.
-async function _pickAndSaveKBM(){
-  const json = JSON.stringify(_buildKBM(), null, 2);
-  const name = _suggestedKBMName();
+// ── Cloud writes ──
+// Overwrites an existing cloud row (id) or creates a new one (no id).
+// Returns the saved row, or null on failure (a message is shown).
+async function _projSaveCloud(id, name, quiet){
+  if(_projSaving) return null;
+  _projSaving = true;
+  const snapAtSave = _projSnapshot();
+  if(!quiet) _showNotification('Saving to cloud...', false);
+  try{
+    const res = await fetch('/api/patterns', {
+      method: id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(id ? { id:id, name:name, data:_cloudBundle() }
+                              : { name:name, data:_cloudBundle() })
+    });
+    if(!res.ok){
+      const t = await res.text().catch(()=> '');
+      _showNotification(_cloudErr(res, t), true);
+      return null;
+    }
+    const row = await res.json();
+    PROJ.where = 'cloud'; PROJ.cloudId = row.id || id; PROJ.name = row.name || name;
+    _kbmFileHandle = null; _kbmCurrentFile = PROJ.name;
+    _projSavedSnap = snapAtSave;
+    _projDirty = _projSnapshot() !== snapAtSave;
+    _projLabel();
+    _showNotification((quiet ? 'Auto-saved "' : 'Saved to cloud as "') + PROJ.name + '"', false);
+    return row;
+  } catch(err){
+    _showNotification('Cloud save failed: ' + (err && err.message ? err.message : 'network error'), true);
+    return null;
+  } finally {
+    _projSaving = false;
+  }
+}
 
+// ── Computer writes ──
+async function _projSaveFileAs(name){
+  const json = JSON.stringify(_buildKBM(), null, 2);
+  const fileName = _safeFileName(name) + '.kbm';
   if(window.showSaveFilePicker){
     try{
       const handle = await window.showSaveFilePicker({
-        suggestedName: name,
-        types: [{ description: 'Pallet project',
-                  accept: { 'application/json': ['.kbm'] } }]
+        suggestedName: fileName,
+        types: [{ description: 'Pallet project', accept: { 'application/json': ['.kbm'] } }]
       });
       const w = await handle.createWritable();
-      await w.write(json);
-      await w.close();
-      _kbmFileHandle  = handle;
-      _kbmCurrentFile = handle.name;
-      document.getElementById('currentFile').textContent = '  \u{1F4C4} ' + handle.name;
+      await w.write(json); await w.close();
+      _kbmFileHandle = handle;
+      PROJ.where = 'file'; PROJ.cloudId = null; PROJ.name = handle.name.replace(/\.kbm$/i,'');
+      _kbmCurrentFile = PROJ.name;
+      _projMarkClean();
+      _showNotification('Saved "' + handle.name + '" to your computer', false);
       return true;
     } catch(err){
-      if(err && err.name === 'AbortError') return false; // user cancelled
-      // any other error: drop through to the download fallback below
+      if(err && err.name === 'AbortError') return false;
     }
   }
-
-  // Fallback for Firefox/Safari/older browsers: browser picks the folder.
+  // Firefox/Safari: plain download to the Downloads folder.
   const blob = new Blob([json], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = name; a.click();
-  URL.revokeObjectURL(url);
-  _kbmFileHandle  = null;
-  _kbmCurrentFile = name;
-  document.getElementById('currentFile').textContent = '  \u{1F4C4} ' + name;
+  a.href = url; a.download = fileName; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+  _kbmFileHandle = null;
+  PROJ.where = 'file'; PROJ.cloudId = null; PROJ.name = fileName.replace(/\.kbm$/i,'');
+  _kbmCurrentFile = PROJ.name;
+  _projMarkClean();
+  _showNotification('Downloaded "' + fileName + '"', false);
   return true;
 }
 
-// Quietly re-writes the file the user already chose, no dialog. If there
-// is no remembered file (or the browser lacks the API), it acts like
-// "Save As" and opens the picker.
-async function _quickSaveKBM(){
-  if(_kbmFileHandle && typeof _kbmFileHandle.createWritable === 'function'){
-    if(await _verifyHandlePermission(_kbmFileHandle)){
-      try{
-        const w = await _kbmFileHandle.createWritable();
-        await w.write(JSON.stringify(_buildKBM(), null, 2));
-        await w.close();
-        document.getElementById('currentFile').textContent =
-          '  \u{1F4C4} ' + _kbmFileHandle.name + '  \u2713';
-        return;
-      } catch(e){}
-    }
+async function _projQuickSaveFile(){
+  if(_kbmFileHandle && typeof _kbmFileHandle.createWritable === 'function'
+     && await _verifyHandlePermission(_kbmFileHandle)){
+    try{
+      const w = await _kbmFileHandle.createWritable();
+      await w.write(JSON.stringify(_buildKBM(), null, 2));
+      await w.close();
+      _projMarkClean();
+      _showNotification('Saved "' + _kbmFileHandle.name + '"', false);
+      return;
+    } catch(e){}
   }
-  _pickAndSaveKBM();
+  // No writable handle (Firefox/Safari, or permission refused): download again.
+  _projSaveFileAs(PROJ.name || _suggestedProjName());
 }
 
+// ── Save (Ctrl+S): back to where it came from ──
 function mnuSave(){
   mnuClose();
-  _quickSaveKBM();
+  if(PROJ.where === 'cloud' && PROJ.cloudId) return _projSaveCloud(PROJ.cloudId, PROJ.name);
+  if(PROJ.where === 'file') return _projQuickSaveFile();
+  _saveAsDialog();   // never saved: ask for a name and location
 }
 
+// ── Save As... (Ctrl+Shift+S): new name, new copy ──
 function mnuSaveAs(){
   mnuClose();
-  _pickAndSaveKBM();
+  _saveAsDialog();
 }
 
-// Saves the current project to the user's Betsel Stack cloud account.
-// Sends the same project bundle to the same-origin /api/patterns route;
-// the server reads the signed-in user from the session cookie and stores
-// the row against that user. The mobile version reads these rows back.
-// Only works inside the signed-in Betsel Stack app (not a loose file).
-async function mnuSaveCloud(){
+// Kept so any old links/buttons to "Save to cloud" still work: saves the
+// current cloud project, or asks for a name if it isn't in the cloud yet.
+function mnuSaveCloud(){
   mnuClose();
-  const proj = (document.getElementById('rptProject')||{}).value || '';
-  const name = (proj.trim() || _suggestedKBMName().replace(/\.kbm$/,'')).slice(0,120);
+  if(PROJ.where === 'cloud' && PROJ.cloudId) return _projSaveCloud(PROJ.cloudId, PROJ.name);
+  _saveAsDialog('cloud');
+}
 
-  // Keep cloud rows lean: a per-user logo doesn't belong in every pattern.
-  const bundle = _buildKBM();
-  if(bundle.settings) bundle.settings.logoDataUrl = null;
-
-  _showNotification('Saving to cloud...', false);
+// ── Rename (cloud projects) ──
+async function mnuRename(){
+  mnuClose();
+  if(!(PROJ.where === 'cloud' && PROJ.cloudId)){
+    _showNotification('Rename works on cloud projects. Use Save As to save under a new name.', true);
+    return;
+  }
+  const next = window.prompt('Rename this project:', PROJ.name || '');
+  if(next === null) return;
+  const name = next.trim().slice(0,120);
+  if(!name || name === PROJ.name) return;
   try{
     const res = await fetch('/api/patterns', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ name: name, data: bundle })
+      method:'PATCH', headers:{ 'Content-Type':'application/json' }, credentials:'same-origin',
+      body: JSON.stringify({ id: PROJ.cloudId, name: name })
     });
-    if(res.status === 401){ _showNotification('Please sign in again to save to cloud', true); return; }
-    if(res.status === 403){ _showNotification('Cloud save needs an active account', true); return; }
-    if(!res.ok){
-      const t = await res.text().catch(function(){ return ''; });
-      _showNotification('Cloud save failed: ' + (t || ('HTTP ' + res.status)), true);
+    if(!res.ok){ _showNotification('Rename failed (HTTP ' + res.status + ')', true); return; }
+    PROJ.name = name; _kbmCurrentFile = name; _projLabel();
+    _showNotification('Renamed to "' + name + '"', false);
+  } catch(err){
+    _showNotification('Rename failed: ' + (err && err.message ? err.message : 'network error'), true);
+  }
+}
+
+// ── Save As dialog ──
+function _saveAsDialog(forceWhere){
+  let ov = document.getElementById('_saveAsOverlay');
+  if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = '_saveAsOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);'
+    + 'display:flex;align-items:center;justify-content:center;';
+  const defWhere = forceWhere || PROJ.where || 'cloud';
+  const defName  = PROJ.name ? (PROJ.name + ' copy') : _suggestedProjName();
+  const radio = (val, label, sub) =>
+      '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid #333;'
+    + 'border-radius:5px;cursor:pointer;margin-bottom:8px;">'
+    + '<input type="radio" name="_saWhere" value="' + val + '"' + (defWhere === val ? ' checked' : '')
+    + ' style="accent-color:#f5a623;margin-top:2px;"/>'
+    + '<span><span style="color:#eee;font-size:13px;">' + label + '</span><br>'
+    + '<span style="color:#888;font-size:11px;">' + sub + '</span></span></label>';
+  ov.innerHTML =
+      '<div style="width:440px;max-width:92vw;background:#1b1b1b;border:1px solid #444;border-radius:8px;'
+    + 'box-shadow:0 10px 40px rgba(0,0,0,.6);font-family:sans-serif;color:#eee;">'
+    + '<div style="padding:14px 18px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;">'
+    + '<span style="font-size:14px;letter-spacing:1px;color:#f5a623;">SAVE AS</span>'
+    + '<span id="_saClose" style="cursor:pointer;font-size:18px;color:#888;">&times;</span></div>'
+    + '<div style="padding:16px 18px;">'
+    + '<label for="_saName" style="display:block;font-size:11px;letter-spacing:1px;color:#aaa;margin-bottom:6px;">PROJECT NAME</label>'
+    + '<input id="_saName" type="text" maxlength="120" style="width:100%;box-sizing:border-box;background:#111;color:#fff;'
+    + 'border:1px solid #555;border-radius:4px;padding:8px 10px;font-size:14px;margin-bottom:14px;"/>'
+    + '<div style="font-size:11px;letter-spacing:1px;color:#aaa;margin-bottom:6px;">SAVE TO</div>'
+    + radio('cloud', 'My cloud account', 'Private to you. Open it from any computer or the mobile version.')
+    + radio('file',  'This computer (.kbm file)', 'A project file you can re-open with File &gt; Open from computer.')
+    + (PROJ.name ? '<div style="font-size:11px;color:#888;margin-top:4px;line-height:1.5;">Saves a new copy. The original "'
+        + PROJ.name.replace(/[<>&"]/g,'') + '" stays as it was.</div>' : '')
+    + '<div id="_saErr" style="color:#ff6b6b;font-size:12px;min-height:16px;margin-top:8px;"></div>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">'
+    + '<button id="_saCancel" style="background:#2a2a2a;color:#ccc;border:1px solid #444;border-radius:4px;padding:7px 16px;cursor:pointer;">Cancel</button>'
+    + '<button id="_saGo" style="background:#f5a623;color:#1a1a1a;border:none;border-radius:4px;padding:7px 18px;font-weight:bold;cursor:pointer;">Save</button>'
+    + '</div></div></div>';
+  document.body.appendChild(ov);
+
+  const nameEl = document.getElementById('_saName');
+  const errEl  = document.getElementById('_saErr');
+  const goBtn  = document.getElementById('_saGo');
+  nameEl.value = defName;
+  setTimeout(()=>{ nameEl.focus(); nameEl.select(); }, 30);
+
+  const close = ()=>{ document.removeEventListener('keydown', onKey, true); ov.remove(); };
+  const onKey = e=>{
+    if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); close(); }
+    if(e.key === 'Enter' && document.activeElement !== goBtn){ e.preventDefault(); go(); }
+  };
+  document.addEventListener('keydown', onKey, true);
+  ov.addEventListener('mousedown', e=>{ if(e.target === ov) close(); });
+  document.getElementById('_saClose').onclick  = close;
+  document.getElementById('_saCancel').onclick = close;
+
+  async function go(){
+    const name  = nameEl.value.trim().slice(0,120);
+    const where = (ov.querySelector('input[name=_saWhere]:checked')||{}).value || 'cloud';
+    if(!name){ errEl.textContent = 'Enter a name.'; nameEl.focus(); return; }
+    goBtn.disabled = true; goBtn.textContent = 'Saving...'; errEl.textContent = '';
+
+    if(where === 'file'){
+      close();
+      await _projSaveFileAs(name);
       return;
     }
-    const row = await res.json();
-    _showNotification('Saved to cloud as "' + (row && row.name ? row.name : name) + '"', false);
-  } catch(err){
-    _showNotification('Cloud save failed: ' + (err && err.message ? err.message : 'network error'), true);
+
+    // Cloud: check for a project that already has this name.
+    let existing = null;
+    try{
+      const res = await fetch('/api/patterns', { credentials:'same-origin' });
+      if(res.ok){
+        const rows = ((await res.json()) || {}).patterns || [];
+        existing = rows.find(r => (r.name || '').trim().toLowerCase() === name.toLowerCase()) || null;
+      } else if(res.status === 401 || res.status === 403){
+        errEl.textContent = _cloudErr(res);
+        goBtn.disabled = false; goBtn.textContent = 'Save'; return;
+      }
+    } catch(e){ /* offline check failed: the save itself will report it */ }
+
+    if(existing && !confirm('"' + existing.name + '" already exists in your cloud.\nReplace it with this project?')){
+      goBtn.disabled = false; goBtn.textContent = 'Save';
+      nameEl.focus(); nameEl.select();
+      return;
+    }
+    const row = await _projSaveCloud(existing ? existing.id : null, name);
+    if(row) close();
+    else { goBtn.disabled = false; goBtn.textContent = 'Save'; }
   }
+  goBtn.onclick = go;
 }
 
 // ── Open from cloud ───────────────────────────────────────────
@@ -6698,6 +6928,7 @@ async function mnuSaveCloud(){
 // /api/patterns route and feeding it to the normal restore path.
 function mnuOpenCloud(){
   mnuClose();
+  if(!_projConfirmDiscard('Open another project')) return;
   _openCloudModal();
 }
 
@@ -6762,6 +6993,7 @@ async function _cloudRenameSelected(){
       _showNotification('Rename failed (HTTP ' + res.status + ')', true);
     } else {
       _showNotification('Renamed to "' + name + '"', false);
+      if(PROJ.where === 'cloud' && PROJ.cloudId === id){ PROJ.name = name; _kbmCurrentFile = name; _projLabel(); }
     }
   } catch(err){
     _showNotification('Rename failed: '
@@ -6795,6 +7027,9 @@ async function _cloudDeleteSelected(){
     } else {
       const out = await res.json().catch(function(){ return {}; });
       const n = (out && out.deleted && out.deleted.length) || ids.length;
+      if(PROJ.where === 'cloud' && ids.indexOf(PROJ.cloudId) !== -1){
+        PROJ.where = null; PROJ.cloudId = null; _projSavedSnap = ''; _projDirty = true; _projLabel();
+      }
       _showNotification('Deleted ' + n + ' pattern' + (n === 1 ? '' : 's') + ' from cloud', false);
     }
   } catch(err){
@@ -6851,7 +7086,7 @@ async function _openCloudModal(){
     const payload = await res.json();
     const rows = (payload && payload.patterns) || [];
     if(!rows.length){
-      list.innerHTML = '<div style="padding:18px;">No saved patterns yet.<br>Use File &rarr; Save to cloud first.</div>';
+      list.innerHTML = '<div style="padding:18px;">No saved patterns yet.<br>Use File &rarr; Save As&hellip; and choose My cloud account.</div>';
       return;
     }
     list.style.textAlign = 'left';
@@ -6924,11 +7159,9 @@ async function _loadCloudPattern(id, name){
       if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Could not open: ' + e.message + '</div>';
       return;
     }
-    _kbmFileHandle  = null;                       // came from cloud, not a local file
-    _kbmCurrentFile = (row.name || name || 'cloud pattern');
-    document.getElementById('currentFile').textContent = '  \u2601 ' + _kbmCurrentFile;
+    _projSet('cloud', row.name || name || 'Cloud project', row.id || id);
     _closeCloudModal();
-    _showNotification('Opened "' + _kbmCurrentFile + '" from cloud', false);
+    _showNotification('Opened "' + PROJ.name + '" from cloud', false);
   } catch(err){
     if(list) list.innerHTML = '<div style="padding:18px;color:#999;">Could not open: '
       + (err && err.message ? err.message : 'network error') + '</div>';
@@ -6937,7 +7170,11 @@ async function _loadCloudPattern(id, name){
 
 function mnuExit(){
   mnuClose();
-  if(confirm('Close the application? Unsaved changes will be lost.')) window.close();
+  if(_projDirty){
+    if(!_projConfirmDiscard('Close the application')) return;
+  } else if(!confirm('Close the application?')) return;
+  _projSkipUnloadWarn = true;
+  window.close();
 }
 
 // ── Settings dialog ───────────────────────────────────────────
@@ -7029,9 +7266,9 @@ function mnuAbout(){
     'Version: 1.0  |  File format: .kbm v'+KBM_VERSION+'\n\n' +
     'Keyboard shortcuts:\n' +
     '  Ctrl+N  New project\n' +
-    '  Ctrl+O  Open .kbm file\n' +
+    '  Ctrl+O  Open from computer\n' +
     '  Ctrl+S  Save\n' +
-    '  Ctrl+Shift+S  Save As\n' +
+    '  Ctrl+Shift+S  Save As (new name / location)\n' +
     '  Ctrl+P  Export PDF\n\n' +
     '3D view controls:\n' +
     '  Left drag: rotate\n' +
@@ -7088,8 +7325,8 @@ function _bsGuideHTML(){
     +kb('Left drag','Rotate the pallet')+kb('Shift + Left drag','Pan the view')+kb('Scroll','Zoom toward the cursor')+'</tbody></table>'
     +'<p style="font-size:11.5px;color:'+MUT+';line-height:1.55;margin-top:9px;">Toggle 3D dimensions and the max-height plane from the View menu. <b style="color:#fff;">Truck View</b> loads your finished pallets into the default trailer to check the fit and count.</p>'
     +sec('04','SAVING &amp; THE CLOUD')
-    +card('On your computer','File → Save / Save to computer as… writes a <b style="color:#fff;">.kbm</b> project file you can re-open with File → Open.')
-    +card('In your cloud account','File → Save to cloud stores the project privately under your account. <b style="color:#fff;">No other user can see your files.</b>')
+    +card('Save and Save As','<b style="color:#fff;">Save</b> (Ctrl+S) updates the project you have open, wherever it lives. <b style="color:#fff;">Save As</b> (Ctrl+Shift+S) saves a new copy under a new name, to your cloud account or as a <b style="color:#fff;">.kbm</b> file on your computer. The original stays as it was.')
+    +card('In your cloud account','Cloud projects are stored privately under your account. <b style="color:#fff;">No other user can see your files.</b> The title bar shows the open project and an <b style="color:#fff;">unsaved</b> marker when you have changes.')
     +card('Open from cloud','Open, <b style="color:#fff;">Rename</b>, or <b style="color:#fff;">Delete</b> saved files — check one or many (or Select all) to delete, or check one to rename. Deletes are permanent.')
     +tip('Turn on <b style="color:#fff;">Auto-save on Export</b> in App Settings to tuck a cloud copy away every time you export a report.')
     +sec('05','SETTINGS &amp; BRANDING')
@@ -7104,8 +7341,8 @@ function _bsGuideHTML(){
     +'<p style="font-size:11.5px;color:'+MUT+';line-height:1.55;margin-top:6px;">Switch Portrait / Landscape and export. Use <b style="color:#fff;">Ctrl+P</b> for a quick branded PDF, or export to <b style="color:#fff;">Excel</b> for the raw numbers. Footer text and preparer name appear on every report.</p>'
     +sec('07','SHORTCUTS')
     +'<table style="width:100%;border-collapse:collapse;margin-top:4px;"><tbody>'
-    +kb('Ctrl + N','New project')+kb('Ctrl + O','Open a .kbm file')+kb('Ctrl + S','Save')
-    +kb('Ctrl + Shift + S','Save to computer as…')+kb('Ctrl + P','Export a branded PDF report')+'</tbody></table>'
+    +kb('Ctrl + N','New project')+kb('Ctrl + O','Open from computer')+kb('Ctrl + S','Save')
+    +kb('Ctrl + Shift + S','Save As (new name / location)')+kb('Ctrl + P','Export a branded PDF report')+'</tbody></table>'
     +'<div style="text-align:center;border-top:1px solid '+LINE+';margin-top:24px;padding-top:14px;">'
     +'<div style="font-family:\'Share Tech Mono\',monospace;font-size:11px;letter-spacing:3px;color:'+A+';">BETSEL STACK\u2122</div>'
     +'<div style="font-size:10px;color:#6f7682;margin-top:3px;letter-spacing:1px;">Pallet Pattern Creator · betselstack.com</div></div>'
@@ -9283,7 +9520,7 @@ const TOUR_STEPS = [
   { id:'save', section:'SAVE', kind:'info', side:'bottom',
     target:()=>document.querySelector('#menubar .mnu-item .mnu-btn'),
     title:'Save your project',
-    body:'<b>File → Save to cloud</b> keeps this project in your account. <b>File → Save</b> saves a file to your computer.',
+    body:'<b>File → Save As</b> names this project and saves it to your cloud account or your computer. After that, <b>Save</b> (Ctrl+S) keeps it up to date.',
     todo:'Use the <b>File</b> menu to save when you\'re done.' },
 
   { id:'finish', kind:'finish', title:'You\'re all set!',
