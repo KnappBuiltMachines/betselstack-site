@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveSubscription, getTeamSeat } from "@/lib/subscription";
 import BillingButtons from "@/components/BillingButtons";
+import { StripeBadge } from "@/components/TrustBadges";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Subscribe" };
@@ -70,6 +71,14 @@ export default async function SubscribePage() {
             off renewal at any time, and the prepaid year is not refundable.
           </p>
           <BillingButtons plan="annual" label="Pay yearly — $279" variant="primary" />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 20 }}>
+          <StripeBadge />
+          <p className="auth-foot" style={{ marginTop: 0 }}>
+            Card details go straight to Stripe and never touch our servers.{" "}
+            <Link href="/security">Security</Link>
+          </p>
         </div>
 
         <p className="auth-foot" style={{ marginTop: 18 }}>

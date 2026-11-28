@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StripeBadge, SupabaseBadge } from "@/components/TrustBadges";
 
 export const metadata = {
   title: "Security & Data Protection",
@@ -128,6 +129,23 @@ export default function SecurityPage() {
           font-size: 15px;
         }
         .bss-card p:last-child { margin-bottom: 0; }
+        .bss-built {
+          margin-top: 28px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 14px 22px;
+          color: var(--muted);
+          font-size: 14px;
+        }
+        .bss-built-label {
+          font-family: var(--display);
+          font-size: 12px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--muted-2);
+          font-weight: 600;
+        }
         .bss-band {
           margin-top: 40px;
           background: var(--panel-2);
@@ -190,6 +208,13 @@ export default function SecurityPage() {
             ))}
           </section>
         ))}
+      </div>
+
+      <div className="bss-built">
+        <span className="bss-built-label">Built on</span>
+        <SupabaseBadge />
+        <StripeBadge />
+        <span>Hosted on Vercel</span>
       </div>
 
       <div className="bss-band">

@@ -17,6 +17,7 @@ import "./home.css";
 import "./showcase.css";
 import HomeShowcase from "@/components/showcase/HomeShowcase";
 import { RevealObserver } from "@/components/HomeMotion";
+import { StripeBadge } from "@/components/TrustBadges";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
@@ -312,6 +313,9 @@ export default function HomePage() {
             </Link>
             .
           </p>
+          <div className="rv" style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+            <StripeBadge />
+          </div>
         </div>
       </section>
 
