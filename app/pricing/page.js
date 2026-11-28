@@ -1,10 +1,11 @@
 import Link from "next/link";
 import PalletMark from "@/components/PalletMark";
+import TeamPricing from "@/components/TeamPricing";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Betsel Stack pricing: $29/month or $279/year (save 20%). Full pallet pattern creator, 3D load view, and branded PDF reports. 7-day free trial, no card.",
+    "Betsel Stack pricing: $29/month or $279/year (save 20%), plus $10/month or $96/year for each added user. Full pallet pattern creator, 3D load view, and branded PDF reports. 7-day free trial, no card.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -16,8 +17,8 @@ const CORE_FEATURES = [
   "Custom branded PDF reports",
 ];
 
-const MONTHLY_FEATURES = [...CORE_FEATURES, "Cancel anytime"];
-const ANNUAL_FEATURES = [...CORE_FEATURES, "Rate locked for 12 months"];
+const MONTHLY_FEATURES = [...CORE_FEATURES, "Add users for $10/month each", "Cancel anytime"];
+const ANNUAL_FEATURES = [...CORE_FEATURES, "Add users for $96/year each", "Rate locked for 12 months"];
 
 function Check() {
   return (
@@ -143,6 +144,8 @@ export default function PricingPage() {
             </Link>
             .
           </p>
+
+          <TeamPricing />
         </div>
       </section>
 

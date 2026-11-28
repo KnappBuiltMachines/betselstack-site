@@ -19,6 +19,7 @@ import HomeShowcase from "@/components/showcase/HomeShowcase";
 import { RevealObserver } from "@/components/HomeMotion";
 import { StripeBadge } from "@/components/TrustBadges";
 import TrustBar from "@/components/TrustBar";
+import TeamPricing from "@/components/TeamPricing";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
@@ -146,7 +147,7 @@ const PLANS = [
     price: "$29",
     per: "/month",
     sub: "7-day free trial – no credit card required",
-    features: [...CORE_FEATURES, "Cancel anytime"],
+    features: [...CORE_FEATURES, "Add users for $10/month each", "Cancel anytime"],
     cta: "Subscribe now — $29/month",
     fine: "Billed monthly in advance. Cancel anytime from your account page.",
   },
@@ -157,7 +158,7 @@ const PLANS = [
     price: "$279",
     per: "/year",
     sub: "$23.25/month – you save $69 a year",
-    features: [...CORE_FEATURES, "Rate locked for 12 months"],
+    features: [...CORE_FEATURES, "Add users for $96/year each", "Rate locked for 12 months"],
     cta: "Pay yearly — $279",
     fine: "Paid in full up front and renews yearly. You can turn off renewal at any time; the prepaid year is not refundable.",
   },
@@ -320,6 +321,8 @@ export default function HomePage() {
           <div className="rv" style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
             <StripeBadge />
           </div>
+
+          <TeamPricing />
         </div>
       </section>
 
