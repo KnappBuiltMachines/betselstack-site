@@ -18,6 +18,7 @@ import "./showcase.css";
 import HomeShowcase from "@/components/showcase/HomeShowcase";
 import { RevealObserver } from "@/components/HomeMotion";
 import { StripeBadge } from "@/components/TrustBadges";
+import TrustBar from "@/components/TrustBar";
 
 export const metadata = {
   title: { absolute: "Betsel Stack™ — Powerful Packaging Engineering, Made Practical" },
@@ -218,6 +219,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ============ TRUST STRIP ============ */}
+      <TrustBar />
 
       {/* ============ WHAT WE STAND FOR ============ */}
       <section className="hm-section hm-section--tight" id="why">
