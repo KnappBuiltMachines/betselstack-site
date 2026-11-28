@@ -32,6 +32,7 @@ export default function sitemap() {
     { url: `${SITE}/compare/cube-iq-alternative`,  lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE}/faq`,      lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${SITE}/contact`,  lastModified: now, changeFrequency: "yearly",  priority: 0.5 },
+    { url: `${SITE}/security`, lastModified: now, changeFrequency: "yearly",  priority: 0.4 },
     { url: `${SITE}/privacy`,  lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
     { url: `${SITE}/terms`,    lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
   ];

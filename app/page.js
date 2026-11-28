@@ -304,6 +304,14 @@ export default function HomePage() {
             </Link>
             .
           </p>
+          <p className="price-fine hm-price-note rv">
+            Your data is encrypted, isolated to your account, and hosted in the
+            US.{" "}
+            <Link href="/security" style={{ color: "var(--amber)" }}>
+              How we protect it
+            </Link>
+            .
+          </p>
         </div>
       </section>
 

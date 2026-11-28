@@ -64,6 +64,7 @@ export default function SiteFooter() {
           <span className="footer-legal">
             <Link href="/privacy">Privacy Policy</Link>
             <Link href="/terms">Terms of Service</Link>
+            <Link href="/security">Security</Link>
           </span>
         </div>
       </div>
